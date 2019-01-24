@@ -1,0 +1,132 @@
+<html>
+    <head>
+        <title>
+            Wild Remote Control
+        </title>
+        <link rel="stylesheet" href="localcontrol.css">
+    </head>
+    <body>
+        <!--
+            <div class="box-container" id="search-container">
+                <div class="justified" id="search-keyword">
+                    <input type="text" placeholder="Search in documents ..." id="keyword-input">
+                </div>
+                <div id="search-btn" class="justified">
+                    Search
+                </div>
+            </div>
+        -->
+
+        <div class="box-container">
+            <div id="mode-btn" class="justified">
+                <img class="justified" id="button-img" src="assets/camera.svg">
+            </div>
+        </div>
+        <!--
+            <div class="box-container justified" id="user-container">
+                <label>User id</label>
+                <input type="text" id="id-input">
+                <div id="user-color"></div>
+            </div>
+        -->
+        <div id="debug-info"></div>
+    </body>
+
+    <script>
+        var ip = window.location.hostname.split(':')[0];
+        var wsUrl = 'ws://' + ip + ':8080';
+        //var searchBtn = document.getElementById('search-btn');
+        var modeBtn = document.getElementById('mode-btn');
+        //var keywordInput = document.getElementById('keyword-input'),
+        //    idInput = document.getElementById('id-input'),
+        var debugInfo = document.getElementById('debug-info'),
+            //userColor = document.getElementById('user-color'),
+            rcWs = new WebSocket(wsUrl),
+            wsReady = false;
+
+        rcWs.onopen = function() {
+            wsReady = true;
+            debugInfo.innerHTML = 'Info: WebSocket ready.'; 
+        };
+
+        rcWs.onclose = function() {
+            wsReady = false;
+            rcWs = null;
+        };
+
+        rcWs.onerror = function() {
+            wsReady = false;
+            rcWs = null;
+        };
+/*
+        searchBtn.addEventListener('click', function () {
+            let keyword = keywordInput.value,
+                id = parseInt(idInput.value, 10);
+            if(!isNaN(id) && keyword.length > 0 && wsReady) {
+                rcWs.send(JSON.stringify({
+                    type: 'keyword',
+                    payload: {
+                        keyword: keyword,
+                        id: id
+                    }
+                }));
+                debugInfo.innerHTML = 'Info: search request sent.'; 
+            } else debugInfo.innerHTML = 'Error: cannot send search request. Check input or WebSocket'; 
+        });
+        */
+        modeBtn.addEventListener('click', function() {
+            //let id = parseInt(idInput.value, 10);
+            if(wsReady) {
+                rcWs.send(JSON.stringify({
+                    type: 'local_vp',
+                    payload: {}
+                }));
+                debugInfo.innerHTML = 'Info: local viewpoint request sent.'; 
+            } else debugInfo.innerHTML = 'Error: cannot send local viewpoint request. Check WebSocket'; 
+        });
+        
+        
+        /*
+        // Send a mode switch request when the button is pressed
+        modeBtn.addEventListener('touchstart', function() {
+            modeBtn.classList.add('button-active');
+            let id = parseInt(idInput.value, 10);
+            if(!isNaN(id) && wsReady) {
+                rcWs.send(JSON.stringify({
+                    type: 'modeswitch',
+                    payload: {
+                        user: id,
+                        modeon: true
+                    }
+                }));
+                debugInfo.innerHTML = 'Info: mode switch on request sent.'; 
+            } else debugInfo.innerHTML = 'Error: cannot send mode switch request. Check input or WebSocket'; 
+        });
+
+        modeBtn.addEventListener('touchend', function() {
+            modeBtn.classList.remove('button-active');
+            let id = parseInt(idInput.value, 10);
+            if(!isNaN(id) && wsReady) {
+                rcWs.send(JSON.stringify({
+                    type: 'modeswitch',
+                    payload: {
+                        user: id,
+                        modeon: false
+                    }
+                }));
+                debugInfo.innerHTML = 'Info: mode switch off request sent.'; 
+            } else debugInfo.innerHTML = 'Error: cannot send mode switch request. Check input or WebSocket'; 
+        })
+        idInput.addEventListener('change', function(evt) {
+            let id = idInput.value,
+            allowedValues = ['0', '1', '2', '3'];
+            
+            if(allowedValues.indexOf(id) > -1) {
+                Array.from(document.body.classList).forEach(c => document.body.classList.remove(c));
+                document.body.classList.add('user-color-u' + id);
+            }
+        })
+*/
+    </script>
+
+</html>

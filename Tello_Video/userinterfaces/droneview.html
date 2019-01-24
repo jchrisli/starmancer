@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head>
+<!--required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
+
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+
+    <link rel="stylesheet" href="TemplateData/style.css">
+
+    <script src="TemplateData/UnityProgress.js"></script>  
+
+    <script src="Build/UnityLoader.js"></script>
+
+</head>
+<body>
+    <div class="container">
+
+        <!--
+        <div class="row">
+            <div class="col-6">
+                <form>
+                    <div class="form-group">
+                        <label for="vp-x">X</label>
+                        <input type="number" class="form-control" id="vp-x" aria-describedby="X" placeholder="X coordinate">
+                    </div>
+                    <div class="form-group">
+                        <label for="vp-y">Y</label>
+                        <input type="number" class="form-control" id="vp-y" aria-describedby="Y" placeholder="Y coordinate">
+                    </div>
+                    <div class="form-group">
+                        <label for="vp-z">Z</label>
+                        <input type="number" class="form-control" id="vp-z" aria-describedby="Z" placeholder="Z coordinate">
+                    </div>
+                    <div class="form-group">
+                        <label for="vp-yaw">Yaw</label>
+                        <input type="number" class="form-control" id="vp-yaw" aria-describedby="Yaw" placeholder="Yaw in degree">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="submit-vp">Submit</button>
+                </form>
+            </div>
+        </div>
+        -->
+
+        <!-- 3d view -->
+        <div class="webgl-content">
+            <div id="gameContainer" style="width: 960px; height: 600px"></div>
+                <div class="footer">
+                    <div class="webgl-logo"></div>
+                    <div class="fullscreen" onclick="gameInstance.SetFullscreen(1)"></div>
+                    <div class="title">Remote View</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+	<!--optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js" integrity="sha384-smHYKdLADwkXOn1EmN1qk/HfnUcbVRZyYmZ4qpPea6sjB/pTJ0euyQp0Mk8ck+5T" crossorigin="anonymous"></script>
+
+    <script src="view.js"></script> 
+    <script>
+        var gameInstance = UnityLoader.instantiate("gameContainer", "Build/Build.json", {onProgress: UnityProgress});
+    </script>
+
+
+
+</body>
+</html> 
+

@@ -6,3 +6,6 @@
 Tello_Video/h264decoder/build
 Tello_Video/h264decoder/libh264decoder.so
 Tello_Video/libh264decoder.so
+
+Tello_Video/userinterfaces/Build
+Tello_Video/userinterfaces/TemplateData

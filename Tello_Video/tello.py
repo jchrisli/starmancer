@@ -457,3 +457,9 @@ class Tello:
         """
 
         return self.move('up', distance)
+
+    def go(self, x_dist, y_dist, z_dist, speed):
+        """ Fly along a vector in the three-dimensional space, at a specified speed
+
+        """
+        return self.send_command('go %s %s %s %s' % (int(x_dist), int(y_dist), int(z_dist), int(speed)))
