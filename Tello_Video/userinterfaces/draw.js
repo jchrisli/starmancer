@@ -76,12 +76,20 @@ class Drawer {
         this._canElem = document.getElementById(canElemId);
 
         /* Set transformation constants */
-        let alpha = 400 / (19.5 * 25.4 * 5);
+        //let alpha = 400 / (19.5 * 25.4 * 5);
         /* This is column major */
         /* xx2d -> transform to 2d */
-        this.pt2dMat = glMatrix.mat4.fromValues(0, alpha, 0, 0, alpha, 0, 0, 0, 0, 0, 1, 0, 500, 150, 0, 1),
-        this.dir2dMat = glMatrix.mat4.fromValues(0, alpha, 0, 0, alpha, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
-        this.pt3dMat = glMatrix.mat4.create(),
+        //this.pt2dMat = glMatrix.mat4.fromValues(0, alpha, 0, 0, alpha, 0, 0, 0, 0, 0, 1, 0, 500, 150, 0, 1),
+        //this.dir2dMat = glMatrix.mat4.fromValues(0, alpha, 0, 0, alpha, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1),
+        this.pt2dMat = glMatrix.mat4.fromValues(5.07761345e-03, 3.68787657e-01, 0, 0,
+                                                3.68536079e-01, -4.08494361e-04, 0, 0,
+                                                0, 0, 1, 0,
+                                                7.75765985e+02, 3.08163430e+02, 0, 1);
+        this.dir2dMat = glMatrix.mat4.fromValues(5.07761345e-03, 3.68787657e-01, 0, 0,
+                                                3.68536079e-01, -4.08494361e-04, 0, 0,
+                                                0, 0, 1, 0,
+                                                0, 0, 0, 1);
+        this.pt3dMat = glMatrix.mat4.create();
         this.dir3dMat = glMatrix.mat4.create();
         glMatrix.mat4.invert(this.pt3dMat, this.pt2dMat);
         glMatrix.mat4.invert(this.dir3dMat, this.dir2dMat);
@@ -106,6 +114,9 @@ class Drawer {
         this._can.mousemove(this._updateMousePos.bind(this));
         this._can.mouseup(this._setViewpoint.bind(this));
         this._widgets = widgets;
+
+        /* for top-down camera view calibration */
+        this._can
     }
 
     setWsCallbacks(cb) {

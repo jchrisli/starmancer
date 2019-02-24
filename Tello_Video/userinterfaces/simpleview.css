@@ -1,3 +1,18 @@
 .invisible {
     visibility: hidden;
 }
+
+#graphics-container {
+    position: relative;
+    /*
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    */
+}
+
+#main-canvas {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+}

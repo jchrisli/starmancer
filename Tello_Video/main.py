@@ -11,8 +11,8 @@ def main():
 	# start the Tkinter mainloop
     controller = TelloController(drone)
     controller.start()
-    vplayer = TelloUI(drone,"./img/")
-    vplayer.root.mainloop() 
+    #vplayer = TelloUI(drone,"./img/")
+    #vplayer.root.mainloop() 
 
 if __name__ == "__main__":
     main()

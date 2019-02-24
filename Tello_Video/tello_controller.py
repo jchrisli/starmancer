@@ -34,7 +34,7 @@ class TelloController():
 
         # User interface WebSocket server
         self.ws_server = None
-        self.ws_port = 8080
+        self.ws_port = 8081
         # User interface html server
         self.web_server = None
         self.web_server_port = 8000
@@ -52,7 +52,7 @@ class TelloController():
         # Debug
         self.keyboard_listener = None
         self.debug = False
-        self.debugUI = False
+        self.debugUI = True
         self.right_click_count = 0
 
         # Tracking
@@ -184,6 +184,8 @@ class TelloController():
                     [x_input, y_input, z_input, pos_speed, yaw_input] = [int(s / 10) for s in signal[:4]] + [int(signal[4])]
                     self.control_sig = [x_input, y_input, z_input, pos_speed, yaw_input]
 
+                    color_print('yaw input is {0}'.format(yaw_input), "WARN")
+
                     if(self.debug):
                         self.i_pitch.append(yaw_input)
                         self.i_roll.append(y_input)
@@ -207,15 +209,14 @@ class TelloController():
         self.vicon_timestamp = time.time()
 
     def start(self):
-        if (self.success):
+        if (self.success or self.debugUI):
 
-            if self.debugUI:
-                return
 
-            print("taking off!")
             #vicon_connection.wait()
-            self.tello.takeoff()
-            time.sleep(8)
+            if not self.debugUI:
+                print("taking off!")
+                self.tello.takeoff()
+                time.sleep(8)
 
             print("Preparing to open Vicon connection")
             self.vicon_connection.start()

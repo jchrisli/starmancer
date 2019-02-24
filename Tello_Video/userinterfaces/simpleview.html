@@ -6,12 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <link rel="stylesheet" href="simpleview.css">
 
-
 </head>
 <body>
-    <svg id="main-canvas" viewBox="0 0 1000 300" xmlns="http://www.w3.org/2000/svg">
-    </svg>    
-    <div class="slidecontainer">
+    <div id="graphics-container">
+        <video id="topdown-view"></video>
+            <svg id="main-canvas" width="1280" height="720" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg"></svg>
+           
+    </div>
+    <div id="slidercontainer">
         <input type="range" min="1" max="2500" value="1000" class="slider" id="height-range">
     </div>
     <script src="js/snap.svg.js"></script>

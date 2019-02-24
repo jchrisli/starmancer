@@ -48,13 +48,13 @@ class Tello:
         self.socket.sendto(b'streamon', self.tello_address)
         print ('sent: streamon')
 
-        self.socket_video.bind((local_ip, self.local_video_port))
+        #self.socket_video.bind((local_ip, self.local_video_port))
 
         # thread for receiving video
         self.receive_video_thread = threading.Thread(target=self._receive_video_thread)
         self.receive_video_thread.daemon = True
 
-        self.receive_video_thread.start()
+        #self.receive_video_thread.start()
 
     def __del__(self):
         """Closes the local socket."""
@@ -99,11 +99,13 @@ class Tello:
         while True:
             try:
                 res_string, ip = self.socket_video.recvfrom(2048)
+                #print('Bytes just received {0}'.format(len(res_string)))
                 packet_data += res_string
                 # end of frame
                 if len(res_string) != 1460:
                     for frame in self._h264_decode(packet_data):
                         self.frame = frame
+                    ## Instead of decoding the packet, send it through websockets
                     packet_data = ""
 
             except socket.error as exc:
@@ -118,6 +120,7 @@ class Tello:
         :return: a list of decoded frame
         """
         res_frame_list = []
+        #print('Bytes of data to decode {0}'.format(len(packet_data)))
         frames = self.decoder.decode(packet_data)
         for framedata in frames:
             (frame, w, h, ls) = framedata
@@ -128,7 +131,6 @@ class Tello:
                 frame = (frame.reshape((h, ls / 3, 3)))
                 frame = frame[:, :w, :]
                 res_frame_list.append(frame)
-
         return res_frame_list
 
     def send_command(self, command):

@@ -119,11 +119,50 @@ class PlaneCommander extends Commander {
     setHeight(h) {
         this.sendCommand('set_vp_height', {'height': h});
     } 
-
-
 }
+
+function placeVideo() {
+    let svgElemRect = document.getElementById('main-canvas').getBoundingClientRect();
+
+    /* get the video element */
+    let vidElem = document.getElementById('topdown-view');
+    vidElem.height = svgElemRect.height / 6 * 4;
+    vidElem.style.marginTop = svgElemRect.height / 6 + "px";
+    vidElem.style.marginBottom = svgElemRect.height / 6 + "px";
+}
+
+/* load video. TODO: move this to a separate file */
+var constraints = { audio: false, video: { width: 1280, height: 720 } }; 
+
+navigator.mediaDevices.getUserMedia(constraints)
+.then(function(mediaStream) {
+  var video = document.getElementById('topdown-view');
+  video.srcObject = mediaStream;
+  video.onloadedmetadata = function(e) {
+    //placeVideo();
+    video.play();
+  };
+})
+.catch(function(err) { console.log(err.name + ": " + err.message); }); // always check for errors at the end.
+
+/* Adjust video size according to svg size */
+window.addEventListener('resize', function(evt) {
+    //placeVideo();
+});
+
+/* ONLY for calibration. Get in-video click position */
+/*
+document.getElementById('topdown-view').addEventListener('click', function(evt) {
+    var rect = evt.target.getBoundingClientRect();
+    var x = evt.clientX - rect.left;
+    var y = evt.clientY - rect.top;
+    var rectW = rect.width,
+        rectH = rect.height;
+    console.log("x: " + x / rectW * 1280 + " y: " + y / rectH * 720);
+});
+*/
 
 var uiWidgets = new Widgets();
 var uiDrawer = new Drawer('main-canvas', uiWidgets);
-var commander = new PlaneCommander(8080, uiDrawer, uiWidgets);
+var commander = new PlaneCommander(8081, uiDrawer, uiWidgets);
 
