@@ -166,3 +166,8 @@ var uiWidgets = new Widgets();
 var uiDrawer = new Drawer('main-canvas', uiWidgets);
 var commander = new PlaneCommander(8081, uiDrawer, uiWidgets);
 
+let fpv = document.getElementById('fpv-view');
+// Create h264 player
+var uri = "ws://127.0.0.1:8090";
+var wsavc = new WSAvcPlayer(fpv, "webgl", 1, 35);
+wsavc.connect(uri);

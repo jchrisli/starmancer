@@ -2,7 +2,11 @@ import socket
 import threading
 import time
 import numpy as np
-import libh264decoder
+#from userinterfaces.VideoTransport import VideoTransport, VideoTransportProtocol
+from userinterfaces.VideoTransportUdp import VideoTransportUdp
+#from userinterfaces.CommandTransportUdp import CommandTransportUdp
+#from userinterfaces.VoiCalculator import VoiCalulator
+import json
 
 class Tello:
     """Wrapper class to interact with the Tello drone."""
@@ -22,7 +26,7 @@ class Tello:
         """
 
         self.abort_flag = False
-        self.decoder = libh264decoder.H264Decoder()
+        #self.decoder = libh264decoder.H264Decoder()
         self.command_timeout = command_timeout
         self.imperial = imperial
         self.response = None  
@@ -33,8 +37,14 @@ class Tello:
         self.socket_video = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # socket for receiving video stream
         self.tello_address = (tello_ip, tello_port)
         self.local_video_port = 11111  # port for receiving video stream
+        self.video_transport_target_port = 8090
+        self.command_transport_target_port = 8091
+        self.command_transport_recv_port = 8092
         self.last_height = 0
         self.socket.bind((local_ip, local_port))
+
+        # Calculate volume of interest based on sketch input
+        #self.voiCalc = VoiCalulator()
 
         # thread for receiving cmd ack
         self.receive_thread = threading.Thread(target=self._receive_thread)
@@ -42,25 +52,38 @@ class Tello:
 
         self.receive_thread.start()
 
+        # thread for receving commands from the WPF frontend
+        #self.command_transport = CommandTransportUdp(self.command_transport_target_port, 
+        #                                            self.command_transport_recv_port,
+        #                                            self._recv_command_handler)
+
+        #self.command_transport.run()
+
         # to receive video -- send cmd: command, streamon
         self.socket.sendto(b'command', self.tello_address)
         print ('sent: command')
         self.socket.sendto(b'streamon', self.tello_address)
         print ('sent: streamon')
 
-        #self.socket_video.bind((local_ip, self.local_video_port))
+        self.socket_video.bind((local_ip, self.local_video_port))
 
         # thread for receiving video
         self.receive_video_thread = threading.Thread(target=self._receive_video_thread)
+        ## Why does this has to be a daemon thread?
         self.receive_video_thread.daemon = True
 
-        #self.receive_video_thread.start()
+        ## Initialize the UDP socket for sending video data
+        self.video_transport_udp = VideoTransportUdp(self.video_transport_target_port)
+
+        self.receive_video_thread.start()
 
     def __del__(self):
         """Closes the local socket."""
 
         self.socket.close()
         self.socket_video.close()
+
+        ## TODO: close all the related thread
     
     def read(self):
         """Return the last frame from camera."""
@@ -96,16 +119,32 @@ class Tello:
 
         """
         packet_data = ""
+        #num_packets = 0
+        #start_time = 0
         while True:
             try:
                 res_string, ip = self.socket_video.recvfrom(2048)
                 #print('Bytes just received {0}'.format(len(res_string)))
                 packet_data += res_string
+                # if num_packets == 0:
+                #     start_time = time.time()
+                # num_packets = num_packets + 1
+                # if num_packets == 200:
+                #     print('Took {} ms to receive 200 packets'.format(str((time.time() - start_time) * 1000))) 
+                #     num_packets = 0
                 # end of frame
                 if len(res_string) != 1460:
-                    for frame in self._h264_decode(packet_data):
-                        self.frame = frame
+                    #print('Bytes to decode {0}'.format(len(packet_data)))
+                    #print(' '.join([str(x) for x in map(ord, packet_data[:14])]))
+                    #for frame in self._h264_decode(packet_data):
+                    #    self.frame = frame
                     ## Instead of decoding the packet, send it through websockets
+                    #VideoTransportProtocol.broadcast_message(packet_data)
+
+                    ## Send the video data through udp
+                    self.video_transport_udp.send(packet_data)
+
+                    #self.video_sample_file.write(packet_data)
                     packet_data = ""
 
             except socket.error as exc:
@@ -132,7 +171,24 @@ class Tello:
                 frame = frame[:, :w, :]
                 res_frame_list.append(frame)
         return res_frame_list
-
+    """
+    def _recv_command_handler(self, data):
+        '''
+            Listen to UDP packets sent to the port
+            Display it for now
+        '''
+        
+        if data['Type'] == 'roi': # region of interest
+            fpvRoi = data['FpvRoi']
+            topRoi = data['TopdownRoi'] 
+            self.voiCalc.set_2d_roi_fpv(fpvRoi['Left'], fpvRoi['Right'], fpvRoi['Top'], fpvRoi['Bottom'])
+            self.voiCalc.set_2d_roi_top(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
+            ## TODO: there may be THREADING issues here
+            (voiC, voiR) = self.voiCalc.get_voi()
+            print('Set voi at {0} with radius {1}'.format(str(voiC), str(voiR)))
+            # print(data['TopdownRoi'])
+    """
+    
     def send_command(self, command):
         """
         Send a command to the Tello and wait for a response.

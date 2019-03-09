@@ -2,10 +2,17 @@
 *.DS_Store
 *.dat
 *.caffemodel
+*.avi
+*.mp4
+*.h264
 
 Tello_Video/h264decoder/build
+Tello_Video/h264decoder/build_backup
 Tello_Video/h264decoder/libh264decoder.so
 Tello_Video/libh264decoder.so
 
 Tello_Video/userinterfaces/Build
 Tello_Video/userinterfaces/TemplateData
+
+Camera_Calib_Etc/debug/
+

@@ -67,6 +67,24 @@ class DistanceFlightController:
         self._target_set_time = t
 
     '''
+        Turn to look at a particular target
+    '''
+    def look_at(self, position):
+        ## There might be some threading issues as the state is set at a different thread (vicon udp thread)
+        ## and this function is called on the UI udp thread
+        gaze_dir = np.array(position) - np.array(self.state[0:3])
+        gaze_dir[2] = 0
+        gaze_dir = gaze_dir / np.linalg.norm(gaze_dir)
+        self.set_target(self.state[0:3] + gaze_dir.tolist(), time.time())
+
+    '''
+        Approach a target from the current looking direction
+    '''
+    def approach(self, position, distance):
+        target = np.array(position) - distance * np.array(self.state[3:])
+        self.set_target(target.tolist() + self.state[3:], time.time())
+
+    '''
         Recover from lost tracking
     '''
     def __recover(self):
@@ -122,13 +140,13 @@ class DistanceFlightController:
             try:
                 speed_mag = np.linalg.norm(speed)
                 #print('Speed are {0} {1}'.format(speed_mag, vel_yaw))
-                print('Speed are {0}'.format(str(speed)))
+                #print('Speed are {0}'.format(str(speed)))
                 if speed_mag < self._still_speed_cap and vel_yaw < self._still_yaw_speed_cap: 
                     ## Speed below the cap indicates that the camera has finished flying one unit (large or small)
                     error = np.array(self._target[0:3], dtype=np.float64) - now
                     error_mag = np.linalg.norm(error)
                     ## TODO: try binary search instead of fixed step
-                    print('Error is {0}'.format(error_mag))
+                    #print('Error is {0}'.format(error_mag))
                     if error_mag > self._dist_step_L:
                         ## in this case, the error is still quite large
                         signal_xyz = np.transpose(np.array([error / error_mag * self._dist_step_L]))

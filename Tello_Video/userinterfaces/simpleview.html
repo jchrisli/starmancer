@@ -10,14 +10,15 @@
 <body>
     <div id="graphics-container">
         <video id="topdown-view"></video>
-            <svg id="main-canvas" width="1280" height="720" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg"></svg>
-           
+        <svg id="main-canvas" width="1280" height="720" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg"></svg>
+        <canvas id="fpv-view"></canvas>
     </div>
     <div id="slidercontainer">
         <input type="range" min="1" max="2500" value="1000" class="slider" id="height-range">
     </div>
     <script src="js/snap.svg.js"></script>
     <script src="js/gl-matrix.js"></script>
+    <script src="js/http-live-player.js"></script>
     <script src="draw.js"></script>
     <script src="view.js"></script>
 

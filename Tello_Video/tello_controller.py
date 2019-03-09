@@ -13,12 +13,15 @@ from flightcontrollers.distance_flight_controller import DistanceFlightControlle
 #from pynput import keyboard
 from pynput.mouse import Listener, Button
 import matplotlib.pyplot as plt
-from userinterfaces.uiWsHandler2 import UiWsHandler2
-from userinterfaces.uiWebServer import UiWebServer
+#from userinterfaces.uiWsHandler2 import UiWsHandler2
+#from userinterfaces.uiWebServer import UiWebServer
 # from utils.transformations import Transformer
 from utils.colorPrint import color_print 
 from Situation import Situation
 from utils.recurringEvent import RecurringEvent
+from userinterfaces.CommandTransportUdp import CommandTransportUdp
+from userinterfaces.VoiCalculator import VoiCalulator
+
 
 class TelloController():
     def __init__(self, tello):
@@ -33,11 +36,20 @@ class TelloController():
         self.vicon_timestamp = 0
 
         # User interface WebSocket server
-        self.ws_server = None
-        self.ws_port = 8081
+        #self.ws_server = None
+        #self.ws_port = 8081
         # User interface html server
-        self.web_server = None
-        self.web_server_port = 8000
+        #self.web_server = None
+        #self.web_server_port = 8000
+
+        self.command_transport_target_port = 8091
+        self.command_transport_recv_port = 8092
+
+        # thread for receving commands from the WPF frontend
+        self.command_transport = CommandTransportUdp(self.command_transport_target_port, \
+                                                    self.command_transport_recv_port, \
+                                                    self._recv_command_handler) 
+        self.voiCalc = VoiCalulator()
 
         self.control_sig = None
         self.state_x = []
@@ -52,16 +64,16 @@ class TelloController():
         # Debug
         self.keyboard_listener = None
         self.debug = False
-        self.debugUI = True
+        self.debugUI = False
         self.right_click_count = 0
 
         # Tracking
         self.vicon_connection = ViconConnection(self.handle_vicon_data)
 
         # User interfaces
-        self.web_server = UiWebServer(self.web_server_port)    
+        # self.web_server = UiWebServer(self.web_server_port)    
 
-        self.ws_server = UiWsHandler2(self.ws_port)
+        # self.ws_server = UiWsHandler2(self.ws_port)
 
         # self.transformer = Transformer()
 
@@ -73,7 +85,6 @@ class TelloController():
         #self.success = True
         else:
             self.success = False
-
         
         ## Threading
         self._recur_query_event = threading.Event()
@@ -91,6 +102,27 @@ class TelloController():
                 self.tello.land()
                 self.right_click_count = 0
         
+    def _recv_command_handler(self, data):
+        '''
+            Listen to UDP packets sent to the port
+            Calculate the volume of interest
+        '''
+        
+        if data['Type'] == 'roi': # region of interest
+            fpvRoi = data['FpvRoi']
+            topRoi = data['TopdownRoi'] 
+            self.voiCalc.set_2d_roi_fpv(fpvRoi['Left'], fpvRoi['Right'], fpvRoi['Top'], fpvRoi['Bottom'])
+            self.voiCalc.set_2d_roi_top(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
+            ## TODO: there may be THREADING issues here
+            (voiC, voiR) = self.voiCalc.get_voi()
+            print('Set voi at {0} with radius {1}'.format(str(voiC), str(voiR)))
+            self.controller.approach(voiC.tolist(), voiR * 7)
+            # print(data['TopdownRoi'])
+        elif data['Type'] == 'roitopdown':
+            topRoi = data['TopdownRoi']
+            look = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
+            self.controller.look_at(look)
+
 
     def __query_battery(self):
         self.tello.get_battery() 
@@ -157,9 +189,9 @@ class TelloController():
             '''
 
             # Send through websocket to the frontend 
-            position_message = json.dumps({'type': 'current_vp', 'payload': {'translation': translation, 'rotation': rotation}})
-            if self.ws_server.started:
-                self.ws_server.sendMessage(position_message)
+            #position_message = json.dumps({'type': 'current_vp', 'payload': {'translation': translation, 'rotation': rotation}})
+            #if self.ws_server.started:
+            #    self.ws_server.sendMessage(position_message)
             ### Update drone actor state
             self.situ.get_actor('cam').set_position(translation)
             self.situ.get_actor('cam').set_rotation(rotation)
@@ -172,6 +204,10 @@ class TelloController():
 
             observation = tuple(translation + rotation)
             signal = self.controller.generate_control_signal(observation)
+            ## Update volume of interest calculator with camera position
+            ## TODO: Note there might be threading issues here
+            self.voiCalc.update_fpv_ext(observation[3:], observation[0:3])
+
             ''' TODO: do not send control signal if the drone is in emergency state (how to tell?) '''
             if not self.debugUI:
                 # if all signals are zero, we let the quadrotor hover
@@ -200,12 +236,12 @@ class TelloController():
             '''
             Update human position through WebSocket
             '''
-            human_pos_msg = json.dumps({'type': 'current_hm', 'payload': {'translation': translation, 'rotation': rotation}})
+            # human_pos_msg = json.dumps({'type': 'current_hm', 'payload': {'translation': translation, 'rotation': rotation}})
             ### Update human actor state
             self.situ.get_actor('human').set_position(translation)
             self.situ.get_actor('human').set_rotation(rotation)
-            if self.ws_server.started:
-                self.ws_server.sendMessage(human_pos_msg)
+            # if self.ws_server.started:
+            #    self.ws_server.sendMessage(human_pos_msg)
         self.vicon_timestamp = time.time()
 
     def start(self):
@@ -221,21 +257,24 @@ class TelloController():
             print("Preparing to open Vicon connection")
             self.vicon_connection.start()
 
-            print("Preparing to start web server")
-            self.web_server.startServer()
+            # print("Preparing to start web server")
+            # self.web_server.startServer()
 
-            print("Preparing to open UI WebSocket connection")
-            self.ws_server.setMessageHandler(self.handle_ws_message)
-            self.ws_server.startServer()
+            #print("Preparing to open UI WebSocket connection")
+            #self.ws_server.setMessageHandler(self.handle_ws_message)
+            #self.ws_server.startServer()
+
+            print("Preparing to open UI udp connection")
+            self.command_transport.start()
 
             self._recur_query_thread.start()
 
-            self.mouse_listener = Listener(
-                            on_move=None,
-                            on_click=self.mouse_clicked,
-                            on_scroll=None)
-            self.mouse_listener.start()
-            target_position = [0, 0, 1500, 0.0, 1.0, 0.0]
+            # self.mouse_listener = Listener(
+            #                 on_move=None,
+            #                 on_click=self.mouse_clicked,
+            #                 on_scroll=None)
+            # self.mouse_listener.start()
+            target_position = [0, -2000, 1000, 0.0, 1.0, 0.0]
             self.controller.set_target(target_position, time.time())
         else:
             color_print('Cannot get battery level. Check the connection.', 'ERROR')
