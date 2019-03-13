@@ -17,7 +17,8 @@ class VoiCalulator():
         v
         (y)
     '''
-    def __init__(self):
+    def __init__(self, camParams):
+        '''
         self._intMatFpv = np.array([[885.5839394885504, 0.0, 488.2530454326725], \
                                     [0.0, 883.6668510262632, 362.2197785226864], \
                                     [0.0, 0.0, 1.0]])
@@ -36,11 +37,15 @@ class VoiCalulator():
         self._extMatFpvT = None
         self._matFpv = None
         ## 
+        '''
+        self._camParams = camParams
+        self._matTop = self._camParams.get_mat_top()
         self._roiFpv = None
         self._roiTop = None
 
     '''
         Concatenate the two np array
+    '''
     '''
     def update_fpv_ext(self, rot, trans):
         #self._extMatFpv = np.concatenate((rot, trans), axis=1)
@@ -51,7 +56,7 @@ class VoiCalulator():
         self._extMatFpvT = - self._extMatFpvR.dot(trans)
         ## Update fpv camera calibration matrix
         self._matFpv = self._intMatFpv.dot(np.hstack((self._extMatFpvR, self._extMatFpvT)))
-
+    '''
     def set_2d_roi_fpv(self, left, right, top, bottom):
         self._roiFpv = {'left': left, 'right': right, 'top': top, 'bottom': bottom}
 
@@ -129,8 +134,11 @@ class VoiCalulator():
         return (np.array(3): center_x, center_y, center_z, number: radius)
     '''
     def get_voi(self):
+        matFpv = self._camParams.get_mat_fpv()
+        intMatFpv = self._camParams.get_int_mat_fpv()
+        intMatTop = self._camParams.get_int_mat_top()
         ## First get the two rays extending from the camera to the center of the rois
-        (rayFpvOrigin, rayFpvDir) = self._get_roi_ray(self._roiFpv, self._matFpv)
+        (rayFpvOrigin, rayFpvDir) = self._get_roi_ray(self._roiFpv, matFpv)
         (rayTopOrigin, rayTopDir) = self._get_roi_ray(self._roiTop, self._matTop)
 
         (voiCenter, alongFpvRay, alongTopRay, dist) = self._fuzzy_intersection(rayFpvOrigin, rayFpvDir, rayTopOrigin, rayTopDir)
@@ -138,8 +146,8 @@ class VoiCalulator():
         ## FIXIT: there are various ways to calculate voi volume; use the simpliest one for now
         ## Consider the volume as a sphere, and set the radius of the sphere to be the largest of the roi width/height reprojected 
         ## back to 3d
-        r1 = self._roi_to_3d(self._roiFpv, alongFpvRay, self._intMatFpv)
-        r2 = self._roi_to_3d(self._roiTop, alongTopRay, self._intMatTop)
+        r1 = self._roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
+        r2 = self._roi_to_3d(self._roiTop, alongTopRay, intMatTop)
         #print('r1: {0}, r2: {1}'.format(r1, r2))
         voiRadius = max(r1, r2) / 2
         return (voiCenter, voiRadius)

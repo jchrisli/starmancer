@@ -23,6 +23,7 @@ from userinterfaces.CommandTransportUdp import CommandTransportUdp
 from userinterfaces.VoiCalculator import VoiCalulator
 from userinterfaces.VoiManager import VoiManager
 import copy
+from utils.geometryUtils import CameraParameters
 
 class TelloController():
     def __init__(self, tello):
@@ -50,8 +51,9 @@ class TelloController():
         self.command_transport = CommandTransportUdp(self.command_transport_target_port, \
                                                     self.command_transport_recv_port, \
                                                     self._recv_command_handler) 
-        self.voiCalc = VoiCalulator()
-        self.voiMng = VoiManager()
+        self.camParams = CameraParameters()
+        self.voiCalc = VoiCalulator(self.camParams)
+        self.voiMng = VoiManager(self.camParams)
 
         self.control_sig = None
         self.state_x = []
@@ -224,7 +226,12 @@ class TelloController():
             signal = self.controller.generate_control_signal(observation)
             ## Update volume of interest calculator with camera position
             ## TODO: Note there might be threading issues here
-            self.voiCalc.update_fpv_ext(observation[3:], observation[0:3])
+            self.camParams.update_fpv_ext(observation[3:], observation[0:3])
+            ## Get updated projected voi position and send it to the frontend
+            projected = self.voiMng.get_all_voi_projected()
+            if projected is not None and len(projected) > 0:
+                projectedDict = map(projected, lambda p: {'id': p[0], 'position3d': p[1], 'size3d': p[2]}
+                
 
             ''' TODO: do not send control signal if the drone is in emergency state (how to tell?) '''
             if not self.debugUI:
