@@ -21,7 +21,8 @@ from Situation import Situation
 from utils.recurringEvent import RecurringEvent
 from userinterfaces.CommandTransportUdp import CommandTransportUdp
 from userinterfaces.VoiCalculator import VoiCalulator
-
+from userinterfaces.VoiManager import VoiManager
+import copy
 
 class TelloController():
     def __init__(self, tello):
@@ -50,6 +51,7 @@ class TelloController():
                                                     self.command_transport_recv_port, \
                                                     self._recv_command_handler) 
         self.voiCalc = VoiCalulator()
+        self.voiMng = VoiManager()
 
         self.control_sig = None
         self.state_x = []
@@ -116,12 +118,28 @@ class TelloController():
             ## TODO: there may be THREADING issues here
             (voiC, voiR) = self.voiCalc.get_voi()
             print('Set voi at {0} with radius {1}'.format(str(voiC), str(voiR)))
-            self.controller.approach(voiC.tolist(), voiR * 7)
-            # print(data['TopdownRoi'])
+            entry = self.voiMng.add_voi(voiC, voiR)
+            self.controller.approach(voiC.tolist(), entry['view_dist'])
+            ## Send voi info to frontend
+            ## Convert it to a list
+            #entryCopy = json.loads(json.dumps(entry))
+            entryCopy = copy.deepcopy(entry)
+            entryCopy["position3d"] = entry["position3d"].tolist()
+            entryCopy["position_topdown"] = entry["position_topdown"].tolist()
+            self.command_transport.send(json.dumps(entryCopy))
+
         elif data['Type'] == 'roitopdown':
             topRoi = data['TopdownRoi']
             look = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
             self.controller.look_at(look)
+        
+        elif data['Type'] == 'look':
+            lookAtId = data['Id'];
+            lookAtVoi = self.voiMng.get_voi(lookAtId)
+            if lookAtVoi is not None:
+                target = lookAtVoi['position3d'].tolist()
+                lookDir = [data['LookDir'][1], data['LookDir'][0], 1]
+                self.controller.approach_from(target, lookDir, lookAtVoi['view_dist'])
 
 
     def __query_battery(self):

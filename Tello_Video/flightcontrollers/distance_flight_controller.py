@@ -80,9 +80,17 @@ class DistanceFlightController:
     '''
         Approach a target from the current looking direction
     '''
-    def approach(self, position, distance):
-        target = np.array(position) - distance * np.array(self.state[3:])
-        self.set_target(target.tolist() + self.state[3:], time.time())
+    def approach(self, look_position, distance):
+        #target = np.array(look_position) - distance * np.array(self.state[3:])
+        #self.set_target(target.tolist() + self.state[3:], time.time())
+        self.approach_from(look_position, self.state[3:], distance)
+
+    '''
+        Approach a target from the given looking direction from a given distance
+    '''
+    def approach_from(self, look_position, look_direction, distance):
+        target = np.array(look_position) - distance * np.array(look_direction)
+        self.set_target(target.tolist() + look_direction, time.time())
 
     '''
         Recover from lost tracking

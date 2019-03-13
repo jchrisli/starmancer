@@ -28,7 +28,7 @@ class VoiCalulator():
         self._extMatTopR = np.array([[0, 1, 0], \
                                     [1, 0, 0], \
                                     [0, 0, -1]])
-        self._extMatTopT = np.array([[0], [0], [2500.0]])
+        self._extMatTopT = np.array([[400.0], [0.0], [2600.0]])
         self._matTop = self._intMatTop.dot(np.hstack((self._extMatTopR, self._extMatTopT)))
         self._extViconToCamera = np.array([1, 0, 0, 0, 0, -1, 0, 1, 0]).reshape(3, 3, order='F')
         ## This is someting constantly changing
@@ -141,7 +141,7 @@ class VoiCalulator():
         r1 = self._roi_to_3d(self._roiFpv, alongFpvRay, self._intMatFpv)
         r2 = self._roi_to_3d(self._roiTop, alongTopRay, self._intMatTop)
         #print('r1: {0}, r2: {1}'.format(r1, r2))
-        voiRadius = max(r1, r2)
+        voiRadius = max(r1, r2) / 2
         return (voiCenter, voiRadius)
         #return (voiCenter, voiRadius, rayFpvOrigin, rayFpvDir, rayTopOrigin, rayTopDir)
 
