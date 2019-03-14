@@ -51,11 +51,15 @@ class CameraParameters():
         rot = np.array(rot).reshape(3, 3)
         rot = self._extViconToCamera.dot(rot)
         trans = np.array(trans).reshape(3, 1)
-        self._extMatFpvR = np.linalg.inv(rot)
-        self._extMatFpvT = - self._extMatFpvR.dot(trans)
-        self._extMatFpv = np.hstack((self._extMatFpvR, self._extMatFpvT))
-        ## Update fpv camera calibration matrix
-        self._matFpv = self._intMatFpv.dot(np.hstack((self._extMatFpvR, self._extMatFpvT)))
+        try:
+            self._extMatFpvR = np.linalg.inv(rot)
+            self._extMatFpvT = - self._extMatFpvR.dot(trans)
+            self._extMatFpv = np.hstack((self._extMatFpvR, self._extMatFpvT))
+            ## Update fpv camera calibration matrix
+            self._matFpv = self._intMatFpv.dot(np.hstack((self._extMatFpvR, self._extMatFpvT)))
+        except np.linalg.linalg.LinAlgError:
+            ## Yes, just silently pass
+            pass
     
     def get_mat_top(self):
         return self._matTop

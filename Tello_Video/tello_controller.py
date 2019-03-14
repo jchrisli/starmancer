@@ -68,7 +68,7 @@ class TelloController():
         # Debug
         self.keyboard_listener = None
         self.debug = False
-        self.debugUI = False
+        self.debugUI = True
         self.right_click_count = 0
 
         # Tracking
@@ -128,7 +128,8 @@ class TelloController():
             entryCopy = copy.deepcopy(entry)
             entryCopy["position3d"] = entry["position3d"].tolist()
             entryCopy["position_topdown"] = entry["position_topdown"].tolist()
-            self.command_transport.send(json.dumps(entryCopy))
+            addRoiCommand = {'type': 'roi', 'payload': entryCopy}
+            self.command_transport.send(json.dumps(addRoiCommand))
 
         elif data['Type'] == 'roitopdown':
             topRoi = data['TopdownRoi']
@@ -230,7 +231,9 @@ class TelloController():
             ## Get updated projected voi position and send it to the frontend
             projected = self.voiMng.get_all_voi_projected()
             if projected is not None and len(projected) > 0:
-                projectedDict = map(projected, lambda p: {'id': p[0], 'position3d': p[1], 'size3d': p[2]}
+                projectedArr = map(lambda p: {'id': p[0], 'position_fpv': p[1], 'size_fpv': p[2]}, projected)
+                projectedDict = {'type': 'fpvupdate', 'payload': projectedArr}
+                self.command_transport.send(json.dumps(projectedDict))
                 
 
             ''' TODO: do not send control signal if the drone is in emergency state (how to tell?) '''
@@ -245,7 +248,7 @@ class TelloController():
                     [x_input, y_input, z_input, pos_speed, yaw_input] = [int(s / 10) for s in signal[:4]] + [int(signal[4])]
                     self.control_sig = [x_input, y_input, z_input, pos_speed, yaw_input]
 
-                    color_print('yaw input is {0}'.format(yaw_input), "WARN")
+                    #color_print('yaw input is {0}'.format(yaw_input), "WARN")
 
                     if(self.debug):
                         self.i_pitch.append(yaw_input)
@@ -255,7 +258,7 @@ class TelloController():
                     if yaw_input > 0:
                         self.tello.rotate_cw(yaw_input)
                     elif yaw_input < 0:
-                        self.tello.rotate_ccw(yaw_input)
+                        self.tello.rotate_ccw(-yaw_input)
                     
         elif name == self.humanName:
             '''

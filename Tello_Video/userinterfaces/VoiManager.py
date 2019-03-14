@@ -72,7 +72,7 @@ class VoiManager():
         The elements of the list can be None
     '''
     def get_all_voi_projected(self):
-        projected = map(self.vois, lambda v: self.get_voi_fpv_projection(v))
-        projected = filter(projected, lambda p: p is not None)
+        projected = map(lambda v: self.get_voi_fpv_projection(v), self.vois)
+        projected = filter(lambda p: p is not None, projected)
         return projected
 
