@@ -46,17 +46,21 @@ class CameraParameters():
         self._fTop = (self._intMatTop[0, 0] + self._intMatTop[1, 1]) / 2
         self._fpvRes = (960, 720)
 
+    '''
+        World -> Vicon -> Camear
+        inv(R_wv) * inv(R_vc) - inv(R_wv) * T
+    '''
     def update_fpv_ext(self, rot, trans):
         #self._extMatFpv = np.concatenate((rot, trans), axis=1)
         rot = np.array(rot).reshape(3, 3)
-        rot = self._extViconToCamera.dot(rot)
+        rot = rot.dot(self._extViconToCamera)
         trans = np.array(trans).reshape(3, 1)
         try:
             self._extMatFpvR = np.linalg.inv(rot)
             self._extMatFpvT = - self._extMatFpvR.dot(trans)
             self._extMatFpv = np.hstack((self._extMatFpvR, self._extMatFpvT))
             ## Update fpv camera calibration matrix
-            self._matFpv = self._intMatFpv.dot(np.hstack((self._extMatFpvR, self._extMatFpvT)))
+            self._matFpv = self._intMatFpv.dot(self._extMatFpv)
         except np.linalg.linalg.LinAlgError:
             ## Yes, just silently pass
             pass

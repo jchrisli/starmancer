@@ -68,7 +68,7 @@ class TelloController():
         # Debug
         self.keyboard_listener = None
         self.debug = False
-        self.debugUI = True
+        self.debugUI = False
         self.right_click_count = 0
 
         # Tracking
@@ -89,6 +89,7 @@ class TelloController():
         #self.success = True
         else:
             self.success = False
+            #self.success = True
         
         ## Threading
         self._recur_query_event = threading.Event()
@@ -128,7 +129,7 @@ class TelloController():
             entryCopy = copy.deepcopy(entry)
             entryCopy["position3d"] = entry["position3d"].tolist()
             entryCopy["position_topdown"] = entry["position_topdown"].tolist()
-            addRoiCommand = {'type': 'roi', 'payload': entryCopy}
+            addRoiCommand = {'type': 'roi3d', 'payload': entryCopy}
             self.command_transport.send(json.dumps(addRoiCommand))
 
         elif data['Type'] == 'roitopdown':
@@ -227,7 +228,7 @@ class TelloController():
             signal = self.controller.generate_control_signal(observation)
             ## Update volume of interest calculator with camera position
             ## TODO: Note there might be threading issues here
-            self.camParams.update_fpv_ext(observation[3:], observation[0:3])
+            self.camParams.update_fpv_ext(rotation, translation)
             ## Get updated projected voi position and send it to the frontend
             projected = self.voiMng.get_all_voi_projected()
             if projected is not None and len(projected) > 0:
