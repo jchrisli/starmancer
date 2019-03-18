@@ -61,7 +61,7 @@ class CameraParameters():
             self._extMatFpv = np.hstack((self._extMatFpvR, self._extMatFpvT))
             ## Update fpv camera calibration matrix
             self._matFpv = self._intMatFpv.dot(self._extMatFpv)
-        except np.linalg.linalg.LinAlgError:
+        except np.linalg.LinAlgError:
             ## Yes, just silently pass
             pass
     

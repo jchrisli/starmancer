@@ -521,3 +521,9 @@ class Tello:
 
         """
         return self.send_command('go %s %s %s %s' % (int(x_dist), int(y_dist), int(z_dist), int(speed)))
+    
+    def curve(self, x1, y1, z1, x2, y2, z2, speed):
+        '''
+            Fly along an arc defined by the current position, (x1, y1, z1), (x2, y2, z2)
+        '''
+        return self.send_command('curve %s %s %s %s %s %s %s' % (x1, y1, z1, x2, y2, z2, speed))
