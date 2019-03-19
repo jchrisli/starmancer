@@ -31,7 +31,8 @@ class VoiManager():
         posInTopdown = (posInTopdown / posInTopdown[2, 0]).flatten()
         #print('2D coords {0}'.format(str(posInTopdown)))
         ## Divide by 3 to put the object in the center of the frame
-        defaultViewDist = self._fFpv * size3d / (self._fpvRes[1] / 3)
+        ## Since the minimum radius for the drone is 500, a lower bound is needed
+        defaultViewDist = max(550.0, self._fFpv * size3d / (self._fpvRes[1] / 4))
         voiEntry = {"id": voiId, "position3d": pos3d, "size3d": size3d, "position_topdown": posInTopdown, "size_topdown": sizeTopdown, "view_dist": defaultViewDist}
         self.vois.append(voiEntry)
         return voiEntry

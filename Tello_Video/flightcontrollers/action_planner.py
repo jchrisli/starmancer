@@ -18,12 +18,12 @@ class ActionPlanner():
         self.__reset_subgoals()
         #self._voi_mana = voi_manager
         self._line_task_min_dist = 283
-        self._arc_subgoal_complted_called = 0
+        self._arc_subgoal_completed_called = 0
     
     def __reset_subgoals(self):
         self._subgoals = []
         self._post_subgoals = []
-        self._ind_goal_to_exec = -1
+        self._ind_goal_to_exec = 0
         self._post_subgoal_func = None
     '''
         Generate parameters for moving along an arc from x1 to x2, with center c and radius r
@@ -52,10 +52,10 @@ class ActionPlanner():
         else:
             return None
 
-    def __arc_subgoal_complete_crit(self):
-        self._arc_subgoal_complted_called += 1
-        if self._arc_subgoal_complted_called > 1:
-            self._arc_subgoal_complted_called = 0
+    def __arc_subgoal_complete_crit(self, error):
+        self._arc_subgoal_completed_called += 1
+        if self._arc_subgoal_completed_called > 1:
+            self._arc_subgoal_completed_called = 0
             return True
         else:
             return False
@@ -65,7 +65,7 @@ class ActionPlanner():
         return {'goal': 'arc', \
             'params': mid_point.tolist() + target.tolist() + vdir.tolist(), \
             ## Always return true
-            'complete_crit': self._arc_subgoal_complted_called}
+            'complete_crit': self.__arc_subgoal_complete_crit}
 
     def __generate_along_line_subgoal(self, target, vdir):
         return {'goal': 'line', \
@@ -74,6 +74,7 @@ class ActionPlanner():
                 'complete_crit': lambda x: x < self._line_task_min_dist}
 
     def __update_current_voi(self, voi):
+        print('Update current voi %s' % str(voi))
         self._current_orbit_voi = voi
         self._current_orbit_voi_id = voi['id']
 
@@ -81,6 +82,7 @@ class ActionPlanner():
         self._current_state = state
 
     def __post_dock_func(self, voi):
+        print('Call post dock function')
         self.__set_state('orbiting')
         self.__update_current_voi(voi)
 
@@ -93,7 +95,7 @@ class ActionPlanner():
         vdir = voi_pos - cur_pos
         vdir = vdir / np.linalg.norm(vdir)
         target = voi_pos - voi_view_dist * vdir
-        return (self.__generate_along_line_subgoal(target, vdir), target, functools.partial(self.__get_post_dock_func, voi=voi))
+        return (self.__generate_along_line_subgoal(target, vdir), target, functools.partial(self.__post_dock_func, voi=voi))
 
     def __orbit(self, cur_pos, voi_pos, voi_view_dist, vdir):
         target = voi_pos + voi_view_dist * (-vdir)
@@ -111,11 +113,11 @@ class ActionPlanner():
         voi_id = voi['id']
         vdir = np.array(vdir)
         # end_target = voi_pos + view_dist * (-vdir)
-        current_voi_pos = self._current_orbit_voi['position3d']
-        current_voi_view_dist = self._current_orbit_voi['view_dist']
         prev_position = init_position
         try:
             if self._current_state == 'orbiting' :
+                current_voi_pos = self._current_orbit_voi['position3d']
+                current_voi_view_dist = self._current_orbit_voi['view_dist']
                 if self._current_orbit_voi_id == voi_id:
                     ## So still focusing on the safe voi, just changing direction
                     ## Move along an arc from the current position to target position
@@ -123,7 +125,7 @@ class ActionPlanner():
                     # self._subgoals.append(self.__generate_along_arc_subgoal(init_position, end_target, voi_pos, view_dist, vdir))
                     g_same = self.__orbit(init_position, voi_pos, view_dist, vdir)[0]
                     self._subgoals.append(g_same)
-                    self._post_subgoals.append(lambda x: x) ## do nothing
+                    self._post_subgoals.append(lambda : True) ## do nothing
                 else:
                     ## So moving to another voi
                     ## Check if the direct path intersect with current voi
@@ -138,7 +140,7 @@ class ActionPlanner():
                         prev_position = g1_target
                         self._subgoals.append(g1)
                         ## Set the state to 'flying' after undocking
-                        self._post_subgoals.append(lambda x: self.__set_state('flying')) 
+                        self._post_subgoals.append(lambda : self.__set_state('flying')) 
                     ## go straight 
                     #g2_vdir = voi_pos - position
                     #g2_vdir = g2_vdir / np.linalg.norm(g2_vdir)
@@ -147,13 +149,13 @@ class ActionPlanner():
                     prev_position = g2_target
                     # g2 = self.__generate_along_line_subgoal(g2_target, g2_vdir)
                     self._subgoals.append(g2)
-                    self._post_subgoals(g2_post)
+                    self._post_subgoals.append(g2_post)
                     ## Now it's close to the target voi, start orbiting around it
                     # g3_target = end_target
                     # g3 = self.__generate_along_arc_subgoal(prev_position, g3_target, voi_pos, view_dist, vdir)
                     (g3, g3_target) = self.__orbit(prev_position, voi_pos, view_dist, vdir)
                     self._subgoals.append(g3)
-                    self._post_subgoals.append(lambda x: x)
+                    self._post_subgoals.append(lambda : True)
             else:
                 ## The state is in 'flying'
                 ## Just dock and then orbit
@@ -163,7 +165,8 @@ class ActionPlanner():
                 self._post_subgoals.append(post_g_dock)
                 (g_orbit, orbit_target) = self.__orbit(prev_position, voi_pos, view_dist, vdir)
                 self._subgoals.append(g_orbit)
-                self._post_subgoals.append(lambda x: x)
+                self._post_subgoals.append(lambda : True)
+            print('Voi subgoals are %s' % str(self._subgoals))
         except np.linalg.LinAlgError:
             print('LinAlg error. Cannot generate subgoals for action planning.')
         finally:
@@ -180,13 +183,15 @@ class ActionPlanner():
         with self._goal_lock:
             self.__reset_subgoals()
             self._subgoals.append(g_look)
-            self._post_subgoals.append(lambda x: x)
+            self._post_subgoals.append(lambda : True)
+            print(self._subgoals)
 
     def next(self):
         if self._post_subgoal_func is not None:
             self._post_subgoal_func()
             self._post_subgoal_func = None
         #self._ind_goal_to_exec = self._ind_goal_to_exec + 1
+        print('Index of next goal %d' % self._ind_goal_to_exec)
         if self._ind_goal_to_exec == len(self._subgoals):
             return None
         else:

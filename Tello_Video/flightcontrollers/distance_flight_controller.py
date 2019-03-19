@@ -138,6 +138,7 @@ class DistanceFlightController:
             return (None, None, None, None, None)
         else:
             delta = curr_time - self._last_timestamp
+            self._last_timestamp = curr_time
         ''' This IS actually distance '''
         signal_xyz = np.zeros((3, 1))
         signal_arc = np.zeros((3, 2))
@@ -153,11 +154,12 @@ class DistanceFlightController:
         vel_yaw = abs(np.arccos(then_yaw_dir.dot(yaw_dir.flatten())) / np.pi * 180.0) / delta
         self.diff_state[3] = vel_yaw
         if not self._within_interval:
+            # print('Current goal is %s' % str(self._cur_goal))
             if self._cur_goal is None:
                 return (0, 0, 0, 0, 0)
             try:
                 speed_mag = np.linalg.norm(speed)
-                #print('Speed are {0} {1}'.format(speed_mag, vel_yaw))
+                # print('Speed are {0} {1}'.format(speed_mag, vel_yaw))
                 #print('Speed are {0}'.format(str(speed)))
                 if speed_mag < self._still_speed_cap and vel_yaw < self._still_yaw_speed_cap: 
                     ## Speed below the cap indicates that the camera has finished flying one unit (large or small)
@@ -167,7 +169,8 @@ class DistanceFlightController:
                     #print('Error is {0}'.format(error_mag))
                     complete_crit = self._cur_goal['complete_crit']
                     goal_type = self._cur_goal['goal']
-                    if complete_crit(error_mag):
+                    # print('Error is %s' % error_mag)
+                    if not complete_crit(error_mag):
                         if goal_type == 'line':
                             if error_mag > self._dist_step_L:
                                 ## in this case, the error is still quite large
@@ -178,8 +181,8 @@ class DistanceFlightController:
                                 signal_xyz_speed = self._speed_S
                             motion_signal = signal_xyz
                         elif goal_type == 'arc':
-                            signal_arc[0,:] = self._cur_goal['params'][0:3]
-                            signal_arc[1,:] = self._target[0:3]
+                            signal_arc[:,0] = np.array(self._cur_goal['params'][0:3]) - now
+                            signal_arc[:,1] = np.array(self._target[0:3]) - now
                             motion_signal = signal_arc
                             signal_xyz_speed = self._speed_arc
                     else:
@@ -202,9 +205,10 @@ class DistanceFlightController:
                     self._within_interval = True
                     self._interval_timer = threading.Timer(self._minimum_signal_interval, self.__set_within_interval)
                     self._interval_timer.start()
-                    ret = tuple([signal_xyz_speed] + local_signal.flatten('F') + [signal_yaw])
+                    ret = tuple([signal_xyz_speed] + local_signal.flatten('F').tolist() + [signal_yaw])
                     return ret
                 else:
+                    #print('Not still.')
                     return (None, None, None, None, None)
 
             except np.linalg.LinAlgError:

@@ -33,12 +33,15 @@ class TelloController():
 
         self.subgoalAccessLock = threading.Lock()
         self.actionPlan = ActionPlanner(self.subgoalAccessLock)
+        self.readyForNextGoalCount = 0
+        ## TODO: this is a silly hack; should just halt producing subgoals before the current ones have been all looped over 
+        self.readyForNextGoalThresh = 50
         # Flight controller and its parameters
         self.controller = DistanceFlightController(self.actionPlan)
 
         # Vicon connection
         self.vicon_connection = None
-        self.vicon_timestamp = 0
+        # self.vicon_timestamp = 0
 
         # User interface WebSocket server
         #self.ws_server = None
@@ -84,12 +87,11 @@ class TelloController():
         self.tello = tello
         ## Check the connection status by querying tello status
         battery_level = self.tello.get_battery()
-        if battery_level != 'none_response':
+        if battery_level != 'none_response' or self.debugUI:
             self.success = True
         #self.success = True
         else:
             self.success = False
-            #self.success = True
         
         ## Threading
         self._recur_query_event = threading.Event()
@@ -122,7 +124,7 @@ class TelloController():
             (voiC, voiR) = self.voiCalc.get_voi()
             print('Set voi at {0} with radius {1}'.format(str(voiC), str(voiR)))
             entry = self.voiMng.add_voi(voiC, voiR)
-            self.controller.approach(voiC.tolist(), entry['view_dist'])
+            # self.controller.approach(voiC.tolist(), entry['view_dist'])
             ## Send voi info to frontend
             ## Convert it to a list
             #entryCopy = json.loads(json.dumps(entry))
@@ -135,7 +137,8 @@ class TelloController():
         elif data['Type'] == 'roitopdown':
             topRoi = data['TopdownRoi']
             look = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
-            self.actionPlan.generate_subgoals_look(self.controller.state[0:3], look.tolilst())
+            print('Get roi topdown')
+            self.actionPlan.generate_subgoals_look(self.controller.state[0:3], look.tolist())
             # self.controller.look_at(look)
         
         elif data['Type'] == 'look':
@@ -188,8 +191,8 @@ class TelloController():
     def __get_goal_for_controller(self):
         with self.subgoalAccessLock:
             n = iter(self.actionPlan).next()
+            self.controller.set_current_goal(n)
             if n is not None:
-                self.controller.set_current_goal(n)
                 target = n['params'][-6:]
                 self.controller.set_target(target, time.time())
 
@@ -200,11 +203,12 @@ class TelloController():
             
         #if(curr_time - self.vicon_timestamp < 0.05 or not self.controller.target_set):
         #if(curr_time - self.vicon_timestamp < 0.05):
-        if(not self.debugUI):
-            return
+        #if(self.debugUI):
+        #    return
 
         # First convert bytes to string
         dataStr = data.decode("utf-8")
+        # print('Data received is %s' % dataStr)
         # To JSON 
         dataJ = json.loads(dataStr)
         name = dataJ["Name"]
@@ -253,13 +257,17 @@ class TelloController():
                         self.i_pitch.append(0)
                         self.i_roll.append(0)
                 else:
+                    print('Signal is %s' % str(signal))
                     ## Convert mm to cm, as the API uses cm
                     #[x_input, y_input, z_input, pos_speed, yaw_input] = [int(s / 10) for s in signal[:4]] + [int(signal[4])]
                     #self.control_sig = [x_input, y_input, z_input, pos_speed, yaw_input]
                     if all([s == 0 for s in signal]):
+                        #self.readyForNextGoalCount += 1
+                        #if self.readyForNextGoalCount > self.readyForNextGoalThresh:
+                        #    self.readyForNextGoalCount = 0
                         ## Subgoal achieved, fetch the next goal and set target
                         self.__get_goal_for_controller()
-                        self.vicon_timestamp = time.time()
+                        # self.vicon_timestamp = time.time()
                         return
                     signal_in_cm = [int(s / 10) for s in signal[:-1]] + [int(signal[-1])]
 
@@ -291,7 +299,7 @@ class TelloController():
             self.situ.get_actor('human').set_rotation(rotation)
             # if self.ws_server.started:
             #    self.ws_server.sendMessage(human_pos_msg)
-        self.vicon_timestamp = time.time()
+        # self.vicon_timestamp = time.time()
 
     def start(self):
         if (self.success or self.debugUI):
