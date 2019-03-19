@@ -112,7 +112,7 @@ class ActionPlanner():
         voi_pos = voi['position3d']
         voi_id = voi['id']
         vdir = np.array(vdir)
-        # end_target = voi_pos + view_dist * (-vdir)
+        end_target = voi_pos + view_dist * (-vdir)
         prev_position = init_position
         try:
             if self._current_state == 'orbiting' :
@@ -166,6 +166,10 @@ class ActionPlanner():
                 (g_orbit, orbit_target) = self.__orbit(prev_position, voi_pos, view_dist, vdir)
                 self._subgoals.append(g_orbit)
                 self._post_subgoals.append(lambda : True)
+            ## Add one subgoal that forces the camera to fly to the specified position
+            g_final = self.__generate_along_line_subgoal(end_target, vdir)
+            self._subgoals.append(g_final)
+            self._post_subgoals.append(lambda : True)
             print('Voi subgoals are %s' % str(self._subgoals))
         except np.linalg.LinAlgError:
             print('LinAlg error. Cannot generate subgoals for action planning.')
