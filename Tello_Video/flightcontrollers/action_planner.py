@@ -6,7 +6,7 @@ import numpy as np
 import functools
 
 class ActionPlanner():
-    def __init__(self, lck):
+    def __init__(self, lck, voim):
         self._goal_lock = lck
         self._current_state = 'flying' ## or 'orbiting'
         self._current_orbit_voi_id = -1 ## id of the current voi
@@ -19,10 +19,19 @@ class ActionPlanner():
         #self._voi_mana = voi_manager
         self._line_task_min_dist = 283
         self._arc_subgoal_completed_called = 0
+        ## Anything above this height should be safe
+        self._SAFE_Z = 1800
+        self._voi_manager = voim
     
     def __reset_subgoals(self):
         self._subgoals = []
         self._post_subgoals = []
+        self._ind_goal_to_exec = 0
+        self._post_subgoal_func = None
+
+    def __set_subgoals(self, subgoals):
+        self._subgoals = subgoals
+        #self._post_subgoals = post_subgoals
         self._ind_goal_to_exec = 0
         self._post_subgoal_func = None
     '''
@@ -82,7 +91,6 @@ class ActionPlanner():
         self._current_state = state
 
     def __post_dock_func(self, voi):
-        print('Call post dock function')
         self.__set_state('orbiting')
         self.__update_current_voi(voi)
 
@@ -176,19 +184,60 @@ class ActionPlanner():
         finally:
             self._goal_lock.release()
 
+    """
+        If there is any potential of contact just raise the camera up and come down, thus 'on stilts'
+        Otherwise go straight
+    """
+    def generate_subgoals_voi_onstilts(self, position, voi, vdir):
+        #with self._goal_lock:
+        # self.__reset_subgoals()
+        sub = []
+        # post_sub = []
+        init_position = np.array(position)
+        view_dist = voi['view_dist']
+        voi_pos = voi['position3d']
+        vdir = np.array(vdir)
+        end_target = voi_pos + view_dist * (-vdir)
+        # prev_position = init_position
+        ## First turn to the target voi
+        look_dir = voi_pos - init_position
+        ## Set z to zero
+        look_dir[2] = 0
+        look_dir = look_dir / np.linalg.norm(look_dir)
+        g_turn = self.__generate_along_line_subgoal(init_position, look_dir)
+        sub.append((g_turn, lambda : True))
+        # Get a straight path, and check if it intersect with any of the vois
+        if self._voi_manager.test_path_against_all_voi(init_position, end_target):
+            ## So the path intersect with at least one of the vois, raise the camera to the safe height
+            up_target = init_position + np.array([0, 0, self._SAFE_Z - init_position[2]])
+            g_up = self.__generate_along_line_subgoal(up_target, look_dir)
+            # prev_position = up_target
+            sub.append((g_up, lambda : True))
+            go_target = np.array([0, 0, self._SAFE_Z - end_target[2]]) + end_target
+            g_go = self.__generate_along_line_subgoal(go_target, look_dir)
+            sub.append((g_go, lambda : True))
+            go_down = self.__generate_along_line_subgoal(end_target, vdir)
+            sub.append((go_down, lambda : True))
+        else:
+            ## Since the path does not intersect with any of the vois, go ahead
+            go_straight = self.__generate_along_line_subgoal(end_target, vdir)
+            sub.append((go_straight, lambda : True))
+        self.__set_subgoals(sub)
+        print(self._subgoals)
+
     '''
         Generate a subgoal for turning to look at a point while staying place
     '''
     def generate_subgoals_look(self, position, look_pos):
         position = np.array(position)
         look_dir = np.array(look_pos) - position
+        look_dir[2] = 0
         look_dir = look_dir / np.linalg.norm(look_dir)
         g_look = self.__generate_along_line_subgoal(position, look_dir)
-        with self._goal_lock:
-            self.__reset_subgoals()
-            self._subgoals.append(g_look)
-            self._post_subgoals.append(lambda : True)
-            print(self._subgoals)
+        # with self._goal_lock:
+        sub = [(g_look, lambda : True)]
+        self.__set_subgoals(sub)
+        print(self._subgoals)
 
     def next(self):
         if self._post_subgoal_func is not None:
@@ -199,10 +248,10 @@ class ActionPlanner():
         if self._ind_goal_to_exec == len(self._subgoals):
             return None
         else:
-            ret = self._ind_goal_to_exec
-            self._post_subgoal_func = self._post_subgoals[self._ind_goal_to_exec]
+            (subgoal, post_subgoal) = self._subgoals[self._ind_goal_to_exec]
+            self._post_subgoal_func = post_subgoal 
             self._ind_goal_to_exec = self._ind_goal_to_exec + 1
-            return self._subgoals[ret]
+            return subgoal
 
     def __iter__(self):
         return self

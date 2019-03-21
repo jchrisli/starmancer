@@ -3,6 +3,8 @@
 '''
 
 import numpy as np
+import math
+import functools
 
 class VoiManager():
     def __init__(self, camParams):
@@ -40,6 +42,28 @@ class VoiManager():
     def __in_fpv_frame(self, x, y):
         res = self._camParams.get_fpv_res()
         return x < res[0] and x > 0 and y < res[1] and y > 0
+    
+    def __test_line_seg_against_voi(self, voi, p1, p2):
+        ## Only do the sphere case for now
+        x = voi['position3d']
+        r = voi['size3d']
+        path_seg = p2 - p1
+        path_seg_len = np.linalg.norm(path_seg)
+        path_dir = path_seg / path_seg_len
+        t = path_dir.dot(x - p1)
+        closest = p1 + t * path_dir
+        dist = np.linalg.norm(closest - x)
+        print('r and dist are %s %s' % (r, dist))
+        if r >= dist:
+            ## Check if any of the two intersection is on the path segment
+            half = math.sqrt(r ** 2 - dist ** 2)
+            #intersect_1 = closest + path_dir * half
+            #intersect_2 = closest - path_dir * half
+            intersect_1 = t + half
+            intersect_2 = t - half
+            return any([v < path_seg_len and v > 0 for v in [intersect_1, intersect_2]])
+        else:
+            return False
 
     def get_voi_fpv_projection(self, voi):
         #voi = self.get_voi(voiId)
@@ -76,4 +100,8 @@ class VoiManager():
         projected = map(lambda v: self.get_voi_fpv_projection(v), self.vois)
         projected = filter(lambda p: p is not None, projected)
         return projected
+
+    def test_path_against_all_voi(self, p1, p2):
+        test_params_bound = functools.partial(self.__test_line_seg_against_voi, p1 = p1, p2 = p2)
+        return any(map(test_params_bound, self.vois))
 

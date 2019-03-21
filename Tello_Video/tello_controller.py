@@ -31,11 +31,12 @@ class TelloController():
         self.viewpointName = "FunkyTello"
         self.humanName = "Head1"
 
+        self.camParams = CameraParameters()
+        self.voiCalc = VoiCalulator(self.camParams)
+        self.voiMng = VoiManager(self.camParams)
+
         self.subgoalAccessLock = threading.Lock()
-        self.actionPlan = ActionPlanner(self.subgoalAccessLock)
-        self.readyForNextGoalCount = 0
-        ## TODO: this is a silly hack; should just halt producing subgoals before the current ones have been all looped over 
-        self.readyForNextGoalThresh = 50
+        self.actionPlan = ActionPlanner(self.subgoalAccessLock, self.voiMng)
         # Flight controller and its parameters
         self.controller = DistanceFlightController(self.actionPlan)
 
@@ -57,9 +58,6 @@ class TelloController():
         self.command_transport = CommandTransportUdp(self.command_transport_target_port, \
                                                     self.command_transport_recv_port, \
                                                     self._recv_command_handler) 
-        self.camParams = CameraParameters()
-        self.voiCalc = VoiCalulator(self.camParams)
-        self.voiMng = VoiManager(self.camParams)
 
         self.control_sig = None
         self.state_x = []
@@ -143,11 +141,12 @@ class TelloController():
         
         elif data['Type'] == 'look':
             lookAtId = data['Id']
+            print('Get look command for %s' % lookAtId)
             lookAtVoi = self.voiMng.get_voi(lookAtId)
             if lookAtVoi is not None:
-                lookDir = [data['LookDir'][1], data['LookDir'][0], 1]
+                lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
                 # self.controller.approach_from(target, lookDir, lookAtVoi['view_dist'])
-                self.actionPlan.generate_subgoals_voi(self.controller.state[0:3], lookAtVoi, lookDir)
+                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], lookAtVoi, lookDir)
 
     def __query_battery(self):
         self.tello.get_battery() 
@@ -189,12 +188,12 @@ class TelloController():
             self.tello.land()
 
     def __get_goal_for_controller(self):
-        with self.subgoalAccessLock:
-            n = iter(self.actionPlan).next()
-            self.controller.set_current_goal(n)
-            if n is not None:
-                target = n['params'][-6:]
-                self.controller.set_target(target, time.time())
+        #with self.subgoalAccessLock:
+        n = iter(self.actionPlan).next()
+        self.controller.set_current_goal(n)
+        if n is not None:
+            target = n['params'][-6:]
+            self.controller.set_target(target, time.time())
 
     def handle_vicon_data(self, data):
         curr_time = time.time()
@@ -262,9 +261,6 @@ class TelloController():
                     #[x_input, y_input, z_input, pos_speed, yaw_input] = [int(s / 10) for s in signal[:4]] + [int(signal[4])]
                     #self.control_sig = [x_input, y_input, z_input, pos_speed, yaw_input]
                     if all([s == 0 for s in signal]):
-                        #self.readyForNextGoalCount += 1
-                        #if self.readyForNextGoalCount > self.readyForNextGoalThresh:
-                        #    self.readyForNextGoalCount = 0
                         ## Subgoal achieved, fetch the next goal and set target
                         self.__get_goal_for_controller()
                         # self.vicon_timestamp = time.time()
