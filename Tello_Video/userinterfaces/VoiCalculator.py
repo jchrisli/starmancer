@@ -5,6 +5,7 @@
 
 import numpy as np
 import numpy.linalg
+import math
 
 class VoiCalulator():
     '''
@@ -43,9 +44,10 @@ class VoiCalulator():
         self._roiFpv = None
         self._roiTop = None
 
-    '''
-        Concatenate the two np array
-    '''
+        ## Constants
+        self._DEFAULT_RADIUS = 110
+        self._DEFAULT_HALF_HEIGHT = self._DEFAULT_RADIUS
+
     '''
     def update_fpv_ext(self, rot, trans):
         #self._extMatFpv = np.concatenate((rot, trans), axis=1)
@@ -57,11 +59,11 @@ class VoiCalulator():
         ## Update fpv camera calibration matrix
         self._matFpv = self._intMatFpv.dot(np.hstack((self._extMatFpvR, self._extMatFpvT)))
     '''
-    def set_2d_roi_fpv(self, left, right, top, bottom):
-        self._roiFpv = {'left': left, 'right': right, 'top': top, 'bottom': bottom}
+    def set_2d_roi_fpv(self, left, right, top, bottom, t):
+        self._roiFpv = {'type': t, 'left': left, 'right': right, 'top': top, 'bottom': bottom}
 
-    def set_2d_roi_top(self, left, right, top, bottom):
-        self._roiTop = {'left': left, 'right': right, 'top': top, 'bottom': bottom}
+    def set_2d_roi_top(self, left, right, top, bottom, t):
+        self._roiTop = {'type': t, 'left': left, 'right': right, 'top': top, 'bottom': bottom}
 
     def get_roi_top_ground_intersection(self, left, right, top, bottom):
         roi = {'left': left, 'right': right, 'top': top, 'bottom': bottom}
@@ -126,8 +128,22 @@ class VoiCalulator():
         s = max(w, h)
         f = (internal[0, 0] + internal[1, 1]) / 2
         r = s * dist / f
-        print('s {0} f {1} d {2}'.format(s, f, dist))
+        # print('s {0} f {1} d {2}'.format(s, f, dist))
         return r
+
+    '''
+        Reproject a 2d roi back to 3d, choosing a method depending on the type of the 
+        roi (line vs contour) 
+        No contour implementation at this point
+        Do not handle 'dot' roi type
+    '''
+    def _typed_roi_to_3d(self, roi, dist, internal_mat):
+        w = roi['right'] - roi['left']
+        h = roi['bottom'] - roi['top']
+        diag = math.sqrt(w ** 2 + h ** 2)  / 1.414
+        f = (internal_mat[0, 0] + internal_mat[1, 1]) / 2
+        diameter = diag * dist / f
+        return diameter 
 
     '''
         Return a volume of interest
@@ -144,13 +160,19 @@ class VoiCalulator():
         (voiCenter, alongFpvRay, alongTopRay, dist) = self._fuzzy_intersection(rayFpvOrigin, rayFpvDir, rayTopOrigin, rayTopDir)
         ## TODO: if the dist is too large, do not return voi
         ## FIXIT: there are various ways to calculate voi volume; use the simpliest one for now
-        ## Consider the volume as a sphere, and set the radius of the sphere to be the largest of the roi width/height reprojected 
-        ## back to 3d
-        r1 = self._roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
-        r2 = self._roi_to_3d(self._roiTop, alongTopRay, intMatTop)
+        if self._roiFpv['type'] == 'dot':
+            r_fpv = self._DEFAULT_HALF_HEIGHT
+        else:
+            r_fpv = self._typed_roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
+        if self._roiTop['type'] == 'dot':
+            r_top = self._DEFAULT_RADIUS
+        else:
+            r_top = self._typed_roi_to_3d(self._roiTop, alongTopRay, intMatTop)
+
+        # r_fpv = self._roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
         #print('r1: {0}, r2: {1}'.format(r1, r2))
-        voiRadius = max(r1, r2) / 2
-        return (voiCenter, voiRadius)
+        # voiRadius = max(r1, r2) / 2
+        return (voiCenter, r_top, r_fpv)
         #return (voiCenter, voiRadius, rayFpvOrigin, rayFpvDir, rayTopOrigin, rayTopDir)
 
 def draw_sphere(cx, cy, cz, r, ax):

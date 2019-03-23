@@ -116,12 +116,12 @@ class TelloController():
         if data['Type'] == 'roi': # region of interest
             fpvRoi = data['FpvRoi']
             topRoi = data['TopdownRoi'] 
-            self.voiCalc.set_2d_roi_fpv(fpvRoi['Left'], fpvRoi['Right'], fpvRoi['Top'], fpvRoi['Bottom'])
-            self.voiCalc.set_2d_roi_top(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
+            self.voiCalc.set_2d_roi_fpv(fpvRoi['Left'], fpvRoi['Right'], fpvRoi['Top'], fpvRoi['Bottom'], fpvRoi['Type'])
+            self.voiCalc.set_2d_roi_top(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'], topRoi['Type'])
             ## TODO: there may be THREADING issues here
-            (voiC, voiR) = self.voiCalc.get_voi()
-            print('Set voi at {0} with radius {1}'.format(str(voiC), str(voiR)))
-            entry = self.voiMng.add_voi(voiC, voiR)
+            (voiC, voiRTop, voiRFpv) = self.voiCalc.get_voi()
+            print('Set voi at {0} with radius {1} and half height {2}'.format(str(voiC), str(voiRTop), str(voiRFpv)))
+            entry = self.voiMng.add_voi(voiC, voiRTop, voiRFpv)
             # self.controller.approach(voiC.tolist(), entry['view_dist'])
             ## Send voi info to frontend
             ## Convert it to a list
@@ -242,7 +242,7 @@ class TelloController():
             ## Get updated projected voi position and send it to the frontend
             projected = self.voiMng.get_all_voi_projected()
             if projected is not None and len(projected) > 0:
-                projectedArr = map(lambda p: {'id': p[0], 'position_fpv': p[1], 'size_fpv': p[2]}, projected)
+                projectedArr = map(lambda p: {'id': p[0], 'position_fpv': p[1], 'w_fpv': p[2], 'h_fpv': p[3]}, projected)
                 projectedDict = {'type': 'fpvupdate', 'payload': projectedArr}
                 self.command_transport.send(json.dumps(projectedDict))
 
@@ -256,10 +256,8 @@ class TelloController():
                         self.i_pitch.append(0)
                         self.i_roll.append(0)
                 else:
-                    print('Signal is %s' % str(signal))
+                    # print('Signal is %s' % str(signal))
                     ## Convert mm to cm, as the API uses cm
-                    #[x_input, y_input, z_input, pos_speed, yaw_input] = [int(s / 10) for s in signal[:4]] + [int(signal[4])]
-                    #self.control_sig = [x_input, y_input, z_input, pos_speed, yaw_input]
                     if all([s == 0 for s in signal]):
                         ## Subgoal achieved, fetch the next goal and set target
                         self.__get_goal_for_controller()

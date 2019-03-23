@@ -21,7 +21,7 @@ class VoiManager():
         self._fFpv = self._camParams.get_f_fpv()
         self._fpvRes = self._camParams.get_fpv_res()
 
-    def add_voi(self, pos3d, size3d):
+    def add_voi(self, pos3d, size3d, sizeHalfHeight):
         voiId = self.nextId
         self.nextId = self.nextId + 1
         pos3dInTopdown = self._extMatTop.dot(np.append(pos3d, [1.0]).reshape(4, 1))
@@ -32,10 +32,10 @@ class VoiManager():
         posInTopdown = self._intMatTop.dot(pos3dInTopdown)
         posInTopdown = (posInTopdown / posInTopdown[2, 0]).flatten()
         #print('2D coords {0}'.format(str(posInTopdown)))
-        ## Divide by 3 to put the object in the center of the frame
-        ## Since the minimum radius for the drone is 500, a lower bound is needed
-        defaultViewDist = max(550.0, self._fFpv * size3d / (self._fpvRes[1] / 4))
-        voiEntry = {"id": voiId, "position3d": pos3d, "size3d": size3d, "position_topdown": posInTopdown, "size_topdown": sizeTopdown, "view_dist": defaultViewDist}
+        ## Put the object in the center of the frame
+        #defaultViewDist = max(550.0, self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 3))
+        defaultViewDist = self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 3)
+        voiEntry = {"id": voiId, "position3d": pos3d, "size3d": size3d, "sizehh": sizeHalfHeight, "position_topdown": posInTopdown, "size_topdown": sizeTopdown, "view_dist": defaultViewDist}
         self.vois.append(voiEntry)
         return voiEntry
 
@@ -43,6 +43,7 @@ class VoiManager():
         res = self._camParams.get_fpv_res()
         return x < res[0] and x > 0 and y < res[1] and y > 0
     
+    ## TODO: test against a ellipsoid rather than a sphere
     def __test_line_seg_against_voi(self, voi, p1, p2):
         ## Only do the sphere case for now
         x = voi['position3d']
@@ -73,16 +74,18 @@ class VoiManager():
         pos3d = voi['position3d']
         #pos3d = np.array([0, 0, 1000])
         size3d = voi['size3d']
+        sizehh = voi['sizehh']
         voiId = voi['id']
         pos3dInFpv = em.dot(np.append(pos3d, [1.0]).reshape(4, 1))
         dist2Fpv = pos3dInFpv[2, 0]
         if dist2Fpv <= 0:
             return None
-        sizeInFpv = self._fFpv * size3d / dist2Fpv
+        widthInFpv = 2 * self._fFpv * size3d / dist2Fpv
+        heightInFpv = 2 * self._fFpv * sizehh / dist2Fpv
         posInFpv = im.dot(pos3dInFpv)
         posInFpv = (posInFpv / posInFpv[2, 0]).flatten()
         if self.__in_fpv_frame(posInFpv[0], posInFpv[1]):
-            return (voiId, posInFpv.tolist(), sizeInFpv)
+            return (voiId, posInFpv.tolist(), widthInFpv, heightInFpv)
         else:
             return None
 
@@ -93,7 +96,7 @@ class VoiManager():
         else:
             return None
     '''
-        Return a list of 2-tuples that contain projected position and size of vois
+        Return a list of 3-tuples that contain projected position and width and height of vois
         The elements of the list can be None
     '''
     def get_all_voi_projected(self):

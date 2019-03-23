@@ -244,7 +244,7 @@ class ActionPlanner():
             self._post_subgoal_func()
             self._post_subgoal_func = None
         #self._ind_goal_to_exec = self._ind_goal_to_exec + 1
-        print('Index of next goal %d' % self._ind_goal_to_exec)
+        #print('Index of next goal %d' % self._ind_goal_to_exec)
         if self._ind_goal_to_exec == len(self._subgoals):
             return None
         else:
