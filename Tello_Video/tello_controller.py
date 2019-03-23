@@ -25,6 +25,8 @@ from userinterfaces.VoiManager import VoiManager
 import copy
 from utils.geometryUtils import CameraParameters
 from flightcontrollers.action_planner import ActionPlanner
+import numpy as np
+from pyquaternion import Quaternion
 
 class TelloController():
     def __init__(self, tello):
@@ -71,7 +73,7 @@ class TelloController():
         # Debug
         self.keyboard_listener = None
         self.debug = False
-        self.debugUI = False
+        self.debugUI = True
         self.right_click_count = 0
 
         # Tracking
@@ -147,6 +149,20 @@ class TelloController():
                 lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
                 # self.controller.approach_from(target, lookDir, lookAtVoi['view_dist'])
                 self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], lookAtVoi, lookDir)
+
+        elif data['Type'] == 'focus':
+            focusId = data['Id']
+            print('Get focus command for %s' % focusId)
+            focusVoi = self.voiMng.get_voi(focusId)
+            if focusVoi is not None:
+                ratioX = data['RatioX']
+                # ratioY = data['RatioY'] ## ignore y axis for now
+                camFacingDir = np.array(self.controller.state[3:])
+                # camFacingDir = np.array(self.controller.state[3:])
+                angleFromCenter = (ratioX - 0.5) * np.pi
+                print('Angle to rotate for focusing %s' % angleFromCenter)
+                viewDir = -(Quaternion(axis = [0, 0, 1], angle = angleFromCenter).rotate(-camFacingDir))
+                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], focusVoi, viewDir)
 
     def __query_battery(self):
         self.tello.get_battery() 
