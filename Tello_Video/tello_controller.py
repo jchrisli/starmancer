@@ -73,7 +73,7 @@ class TelloController():
         # Debug
         self.keyboard_listener = None
         self.debug = False
-        self.debugUI = True
+        self.debugUI = False
         self.right_click_count = 0
 
         # Tracking
@@ -161,7 +161,7 @@ class TelloController():
                 # camFacingDir = np.array(self.controller.state[3:])
                 angleFromCenter = (ratioX - 0.5) * np.pi
                 print('Angle to rotate for focusing %s' % angleFromCenter)
-                viewDir = -(Quaternion(axis = [0, 0, 1], angle = angleFromCenter).rotate(-camFacingDir))
+                viewDir = -(Quaternion(axis = [0.0, 0.0, 1.0], angle = angleFromCenter).rotate(-camFacingDir))
                 self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], focusVoi, viewDir)
 
     def __query_battery(self):

@@ -1,4 +1,5 @@
 import numpy as np
+from pyquaternion import Quaternion
 
 def euler_angle_to_mat(euler_x, euler_y, euler_z):
     sins = np.sin((euler_x, euler_y, euler_z))
@@ -36,6 +37,9 @@ class CameraParameters():
         self._extMatTop = np.hstack((self._extMatTopR, self._extMatTopT))
         self._matTop = self._intMatTop.dot(np.hstack((self._extMatTopR, self._extMatTopT)))
         self._extViconToCamera = np.array([1, 0, 0, 0, 0, -1, 0, 1, 0]).reshape(3, 3, order='F')
+        camTiltAngle = -12.0 * np.pi / 180
+        qRegCam = Quaternion(axis = [1.0, 0.0, 0.0], angle = camTiltAngle)
+        self._extViconToCamera = self._extViconToCamera.dot(qRegCam.rotation_matrix)
         ## This is someting constantly changing
         self._extMatFpvR = None
         self._extMatFpvT = None
