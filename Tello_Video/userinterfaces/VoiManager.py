@@ -34,7 +34,7 @@ class VoiManager():
         #print('2D coords {0}'.format(str(posInTopdown)))
         ## Put the object in the center of the frame
         #defaultViewDist = max(550.0, self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 3))
-        defaultViewDist = self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 3)
+        defaultViewDist = self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 4)
         voiEntry = {"id": voiId, "position3d": pos3d, "size3d": size3d, "sizehh": sizeHalfHeight, "position_topdown": posInTopdown, "size_topdown": sizeTopdown, "view_dist": defaultViewDist}
         self.vois.append(voiEntry)
         return voiEntry

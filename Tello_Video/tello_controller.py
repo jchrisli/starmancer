@@ -10,8 +10,9 @@ import json
 from networking.viconConnection import ViconConnection
 from flightcontrollers.distance_flight_controller import DistanceFlightController
 # Debug
-#from pynput import keyboard
-from pynput.mouse import Listener, Button
+from pynput import keyboard
+# from pynput.mouse import Listener, Button
+# import pynput.keyboard
 import matplotlib.pyplot as plt
 #from userinterfaces.uiWsHandler2 import UiWsHandler2
 #from userinterfaces.uiWebServer import UiWebServer
@@ -96,18 +97,48 @@ class TelloController():
         ## Threading
         self._recur_query_event = threading.Event()
         self._recur_query_thread = RecurringEvent(self._recur_query_event, self.__query_battery, 3)
-        # self.success = self.mambo.connect(num_retries=3)
-        # print("connected: %s" % self.success)
 
-    def mouse_clicked(self, x, y, but, pressed):
-        if but == Button.left:
-            print('state is {0}'.format(str(self.controller.state)))
-            print('control signal is {}'.format(str(self.control_sig)))
-        elif but == Button.right and self.tello is not None:
-            self.right_click_count = self.right_click_count + 1
-            if self.right_click_count > 2:
-                self.tello.land()
-                self.right_click_count = 0
+        ## Manual control params
+        self._MANUAL_DIST = 0.2 # Other APIs use meter as the unit
+        self._MANUAL_DEG = 10
+        self._keyboard_list = keyboard.Listener(on_press=self.key_pressed)
+
+    '''
+        def mouse_clicked(self, x, y, but, pressed):
+            if but == Button.left:
+                print('state is {0}'.format(str(self.controller.state)))
+                print('control signal is {}'.format(str(self.control_sig)))
+            elif but == Button.right and self.tello is not None:
+                self.right_click_count = self.right_click_count + 1
+                if self.right_click_count > 2:
+                    self.tello.land()
+                    self.right_click_count = 0
+    '''
+
+    '''
+        Keyboard listener for manual control of the camera 
+        W: up S: down A: rotate ccw D: rotate cw 
+        Arrow up: forward Arrow down: backward Arrow left: left Arrow right: right
+    '''
+    def key_pressed(self, key):
+        ## 
+        print(str(key))
+        if key.char == 'w':
+            self.tello.move_up(self._MANUAL_DIST)
+        elif key.char == 's':
+            self.tello.move_down(self._MANUAL_DIST)
+        elif key.char == 'a':
+            self.tello.rotate_ccw(self._MANUAL_DEG)
+        elif key.char == 'd':
+            self.tello.rotate_cw(self._MANUAL_DEG)
+        elif key.char == 'i':
+            self.tello.move_forward(self._MANUAL_DIST)
+        elif key.char == 'k':
+            self.tello.move_backward(self._MANUAL_DIST)
+        elif key.char == 'j':
+            self.tello.move_left(self._MANUAL_DIST)
+        elif key.char == 'l':
+            self.tello.move_right(self._MANUAL_DIST)
         
     def _recv_command_handler(self, data):
         '''
@@ -166,6 +197,7 @@ class TelloController():
 
     def __query_battery(self):
         self.tello.get_battery() 
+        # self.tello.send_command('command')
 
     def handle_ws_message(self, action, data):
         if action == 'set_vp':
@@ -313,13 +345,12 @@ class TelloController():
 
     def start(self):
         if (self.success or self.debugUI):
-
-
             #vicon_connection.wait()
             if not self.debugUI:
                 print("taking off!")
                 self.tello.takeoff()
-                time.sleep(8)
+                time.sleep(5)
+                self.tello.move_up(0.5)
 
             print("Preparing to open Vicon connection")
             self.vicon_connection.start()
@@ -340,11 +371,12 @@ class TelloController():
             #                 on_move=None,
             #                 on_click=self.mouse_clicked,
             #                 on_scroll=None)
+            self._keyboard_list.start()
             # self.mouse_listener.start()
             # target_position = [0, -2000, 1000, 0.0, 1.0, 0.0]
             # self.controller.set_target(target_position, time.time())
         else:
-            color_print('Cannot get battery level. Check the connection.', 'ERROR')
+            print('Cannot get battery level. Check the connection.', 'ERROR')
 
 
 
