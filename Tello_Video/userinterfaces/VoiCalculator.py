@@ -62,8 +62,8 @@ class VoiCalulator():
     def set_2d_roi_fpv(self, left, right, top, bottom, t):
         self._roiFpv = {'type': t, 'left': left, 'right': right, 'top': top, 'bottom': bottom}
 
-    def set_2d_roi_top(self, left, right, top, bottom, t):
-        self._roiTop = {'type': t, 'left': left, 'right': right, 'top': top, 'bottom': bottom}
+    def set_2d_roi_top(self, left, right, top, bottom, angle, t):
+        self._roiTop = {'type': t, 'angle': angle, 'left': left, 'right': right, 'top': top, 'bottom': bottom}
 
     def get_roi_top_ground_intersection(self, left, right, top, bottom):
         roi = {'left': left, 'right': right, 'top': top, 'bottom': bottom}
