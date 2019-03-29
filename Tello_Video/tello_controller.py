@@ -101,7 +101,18 @@ class TelloController():
         ## Manual control params
         self._MANUAL_DIST = 0.2 # Other APIs use meter as the unit
         self._MANUAL_DEG = 10
+        self._home_pressed = 0
+        self._home_position = [0, -1500, 1200]
+        self._home_dir = [0, 1, 0]
+        self.voiMng.set_home_voi(self._home_position)
         self._keyboard_list = keyboard.Listener(on_press=self.key_pressed)
+
+        ## Record roi data onto a file
+        timed_name = time.strftime('%d-%b-%H-%M-%S', time.localtime()) + '.csv'
+        self._voi_file = open('voirecords/' + timed_name, 'wt')
+
+        # rightnow = time.strftime('%H %M %S', time.localtime())
+        # self._roi_history = open('roihistory_%s.txt' % rightnow, 'wt')
 
     '''
         def mouse_clicked(self, x, y, but, pressed):
@@ -122,7 +133,7 @@ class TelloController():
     '''
     def key_pressed(self, key):
         ## 
-        print(str(key))
+        print('%s pressed' % str(key))
         if key.char == 'w':
             self.tello.move_up(self._MANUAL_DIST)
         elif key.char == 's':
@@ -139,6 +150,17 @@ class TelloController():
             self.tello.move_left(self._MANUAL_DIST)
         elif key.char == 'l':
             self.tello.move_right(self._MANUAL_DIST)
+        ## Homing after pressing 'h' three times
+        elif key.char == 'h':
+            self._home_pressed += 1
+            if self._home_pressed > 1:
+                self._home_pressed = 0
+                home_voi = self.voiMng.get_home_voi()
+                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], home_voi, self._home_dir)
+                rmall_cmd = {'type': 'removeall'}
+                self.command_transport.send(json.dumps(rmall_cmd))
+                ## Clear all existing vois
+                self.voiMng.clear_all_vois()
         
     def _recv_command_handler(self, data):
         '''
@@ -154,6 +176,8 @@ class TelloController():
             ## TODO: there may be THREADING issues here
             (voiC, voiRTop, voiRFpv) = self.voiCalc.get_voi()
             print('Set voi at {0} with radius {1} and half height {2}'.format(str(voiC), str(voiRTop), str(voiRFpv)))
+            self._voi_file.write(','.join([str(voiC[0]), str(voiC[1]), str(voiC[2]), str(voiRTop), str(voiRFpv)]))
+            # self._roi_history.write('%s %s %s %s %s' % (voiC[0], voi[1], voi[2], voiRTop, voiRFpv))
             entry = self.voiMng.add_voi(voiC, voiRTop, voiRFpv)
             # self.controller.approach(voiC.tolist(), entry['view_dist'])
             ## Send voi info to frontend
@@ -179,7 +203,7 @@ class TelloController():
             if lookAtVoi is not None:
                 lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
                 # self.controller.approach_from(target, lookDir, lookAtVoi['view_dist'])
-                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], lookAtVoi, lookDir)
+                self.actionPlan.generate_subgoals_voi_orbit(self.controller.state[0:3], self.controller.state[3:], lookAtVoi, lookDir)
 
         elif data['Type'] == 'focus':
             focusId = data['Id']
@@ -191,12 +215,16 @@ class TelloController():
                 camFacingDir = np.array(self.controller.state[3:])
                 # camFacingDir = np.array(self.controller.state[3:])
                 angleFromCenter = (ratioX - 0.5) * np.pi
-                print('Angle to rotate for focusing %s' % angleFromCenter)
+                # print('Angle to rotate for focusing %s' % angleFromCenter)
                 viewDir = -(Quaternion(axis = [0.0, 0.0, 1.0], angle = angleFromCenter).rotate(-camFacingDir))
-                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], focusVoi, viewDir)
+                if ratioX > 0.75 or ratioX < 0.25:
+                    self.actionPlan.generate_subgoals_voi_orbit(self.controller.state[0:3], self.controller.state[3:], focusVoi, viewDir)
+                else:
+                    self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, viewDir)
+
 
     def __query_battery(self):
-        self.tello.get_battery() 
+        print('Current battery level is %s' % self.tello.get_battery())
         # self.tello.send_command('command')
 
     def handle_ws_message(self, action, data):
@@ -349,8 +377,8 @@ class TelloController():
             if not self.debugUI:
                 print("taking off!")
                 self.tello.takeoff()
-                time.sleep(5)
-                self.tello.move_up(0.5)
+                time.sleep(8)
+                self.tello.move_up(0.2)
 
             print("Preparing to open Vicon connection")
             self.vicon_connection.start()

@@ -41,8 +41,8 @@ class DistanceFlightController:
         self._still_speed_cap = 100
         ## Cap for yaw
         self._still_yaw_speed_cap = 5
-        self._speed_L = 300
-        self._speed_S = 200
+        self._speed_L = 600
+        self._speed_S = 400
         self._speed_arc = 200
         ## Never send two commands within this interval
         self._minimum_signal_interval = 1

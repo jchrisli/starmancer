@@ -21,6 +21,15 @@ class VoiManager():
         self._fFpv = self._camParams.get_f_fpv()
         self._fpvRes = self._camParams.get_fpv_res()
 
+        ## Add a virtual voi for the home position
+        self._homeVoi = None
+
+    def set_home_voi(self, position):
+        self._homeVoi = {'position3d': np.array(position), 'view_dist': 1}
+
+    def get_home_voi(self):
+        return self._homeVoi
+
     def add_voi(self, pos3d, size3d, sizeHalfHeight):
         voiId = self.nextId
         self.nextId = self.nextId + 1
@@ -34,10 +43,14 @@ class VoiManager():
         #print('2D coords {0}'.format(str(posInTopdown)))
         ## Put the object in the center of the frame
         #defaultViewDist = max(550.0, self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 3))
-        defaultViewDist = self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 4)
+        defaultViewDist = self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 3.333)
         voiEntry = {"id": voiId, "position3d": pos3d, "size3d": size3d, "sizehh": sizeHalfHeight, "position_topdown": posInTopdown, "size_topdown": sizeTopdown, "view_dist": defaultViewDist}
         self.vois.append(voiEntry)
         return voiEntry
+
+    def clear_all_vois(self):
+        self.vois = []
+        self.nextId = 0 
 
     def __in_fpv_frame(self, x, y):
         res = self._camParams.get_fpv_res()
@@ -54,7 +67,7 @@ class VoiManager():
         t = path_dir.dot(x - p1)
         closest = p1 + t * path_dir
         dist = np.linalg.norm(closest - x)
-        print('r and dist are %s %s' % (r, dist))
+        # print('r and dist are %s %s' % (r, dist))
         if r >= dist:
             ## Check if any of the two intersection is on the path segment
             half = math.sqrt(r ** 2 - dist ** 2)
