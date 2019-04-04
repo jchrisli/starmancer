@@ -74,7 +74,7 @@ class TelloController():
         # Debug
         self.keyboard_listener = None
         self.debug = False
-        self.debugUI = False
+        self.debugUI = True
         self.right_click_count = 0
 
         # Tracking
@@ -172,7 +172,7 @@ class TelloController():
             fpvRoi = data['FpvRoi']
             topRoi = data['TopdownRoi'] 
             self.voiCalc.set_2d_roi_fpv(fpvRoi['Left'], fpvRoi['Right'], fpvRoi['Top'], fpvRoi['Bottom'], fpvRoi['Type'])
-            self.voiCalc.set_2d_roi_top(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'], topRoi['Type'])
+            self.voiCalc.set_2d_roi_top(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'], topRoi['Angle'], topRoi['Type'])
             ## TODO: there may be THREADING issues here
             (voiC, voiRTop, voiRFpv) = self.voiCalc.get_voi()
             print('Set voi at {0} with radius {1} and half height {2}'.format(str(voiC), str(voiRTop), str(voiRFpv)))
