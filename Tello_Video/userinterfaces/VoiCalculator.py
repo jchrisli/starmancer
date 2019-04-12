@@ -146,28 +146,58 @@ class VoiCalulator():
         return diameter 
 
     '''
+        Get both height and radius from this view
+    '''
+    def _fpv_roi_to_3d(self, roi, center, dist, internal_mat, external_mat):
+        W = roi['right'] - roi['left']
+        f = (internal_mat[0, 0] + internal_mat[1, 1]) / 2
+        H = roi['bottom'] - roi['top']
+        r = (W / 2) * dist / f
+        ## (x, y, z) is the center of the cylinder in the camera frame
+        (x, y, z) = external_mat.dot(np.append(center, 1.0).reshape(4, 1)).flatten().tolist()
+        ## h is the root a quadratic equation
+        valsin = math.sin(12 / 180.0 * math.pi)
+        valcos = math.cos(12 / 180.0 * math.pi)
+        valcot = 1 / (valsin / valcos)
+        valcsc = 1 / valsin
+        h = (1/(2 * H)) * (4 * f * r + 4 * H * r * valcot + 4 * f * y * valcsc -  \
+            4 * f * z * valcot * valcsc + \
+            valcsc * valcsc * math.sqrt(-4 * H * valsin * valsin * \
+            (- 4 * H * z * z + 8 * f * r * y * valcos + \
+            4 * H * r * r * valcos * valcos + \
+            8 * f * r * r * valcos * valsin) + (4 * f * z * valcos - \
+            4 * f * y * valsin - \
+            4 * H * r * valcos * valsin - \
+            4 * f * r * valsin * valsin) ** 2))
+        return (r, h / 2) 
+
+    '''
         Return a volume of interest
         return (np.array(3): center_x, center_y, center_z, number: radius)
     '''
     def get_voi(self):
         matFpv = self._camParams.get_mat_fpv()
         intMatFpv = self._camParams.get_int_mat_fpv()
-        intMatTop = self._camParams.get_int_mat_top()
+        extMatFpv = self._camParams.get_ext_mat_fpv()
+        # intMatTop = self._camParams.get_int_mat_top()
         ## First get the two rays extending from the camera to the center of the rois
         (rayFpvOrigin, rayFpvDir) = self._get_roi_ray(self._roiFpv, matFpv)
         (rayTopOrigin, rayTopDir) = self._get_roi_ray(self._roiTop, self._matTop)
 
         (voiCenter, alongFpvRay, alongTopRay, dist) = self._fuzzy_intersection(rayFpvOrigin, rayFpvDir, rayTopOrigin, rayTopDir)
         ## TODO: if the dist is too large, do not return voi
-        ## FIXIT: there are various ways to calculate voi volume; use the simpliest one for now
+        ## r_fpv is the height
+        '''
         if self._roiFpv['type'] == 'dot':
             r_fpv = self._DEFAULT_HALF_HEIGHT
         else:
-            r_fpv = self._typed_roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
+            r_fpv = self._fpv_roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
         if self._roiTop['type'] == 'dot':
             r_top = self._DEFAULT_RADIUS
         else:
             r_top = self._typed_roi_to_3d(self._roiTop, alongTopRay, intMatTop)
+        '''
+        (r_top, r_fpv) = self._fpv_roi_to_3d(self._roiFpv, voiCenter, alongFpvRay, intMatFpv, extMatFpv)
 
         # r_fpv = self._roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
         #print('r1: {0}, r2: {1}'.format(r1, r2))
