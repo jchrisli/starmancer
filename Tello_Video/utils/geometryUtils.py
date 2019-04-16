@@ -38,13 +38,19 @@ class CameraParameters():
         self._matTop = self._intMatTop.dot(np.hstack((self._extMatTopR, self._extMatTopT)))
         self._extViconToCamera = np.array([1, 0, 0, 0, 0, -1, 0, 1, 0]).reshape(3, 3, order='F')
         camTiltAngle = -12.0 * np.pi / 180
-        qRegCam = Quaternion(axis = [1.0, 0.0, 0.0], angle = camTiltAngle)
-        self._extViconToCamera = self._extViconToCamera.dot(qRegCam.rotation_matrix)
+        self._qRegCam = Quaternion(axis = [1.0, 0.0, 0.0], angle = camTiltAngle)
+        self._extViconToCamera = self._extViconToCamera.dot(self._qRegCam.rotation_matrix)
         ## This is someting constantly changing
         self._extMatFpvR = None
         self._extMatFpvT = None
         self._extMatFpv = None
         self._matFpv = None
+        self._vecUpWorld = None
+        self._vecLookWorld= None
+        #self._vecLookLocal = (self._qRegCam.inverse).rotation_matrix.dot(np.array([0, 1.0, 0]))
+        #self._vecUpLocal= (self._qRegCam.inverse).rotation_matrix.dot(np.array([0, 0, 1.0]))
+        self._vecLookLocal = self._qRegCam.rotation_matrix.dot(np.array([0, 1.0, 0]))
+        self._vecUpLocal= self._qRegCam.rotation_matrix.dot(np.array([0, 0, 1.0]))
 
         self._fFpv = (self._intMatFpv[0, 0] + self._intMatFpv[1, 1]) / 2
         self._fTop = (self._intMatTop[0, 0] + self._intMatTop[1, 1]) / 2
@@ -57,6 +63,9 @@ class CameraParameters():
     def update_fpv_ext(self, rot, trans):
         #self._extMatFpv = np.concatenate((rot, trans), axis=1)
         rot = np.array(rot).reshape(3, 3)
+        ## Update camera up and look vector in the world space
+        self._vecLookWorld = rot.dot(self._vecLookLocal)
+        self._vecUpWorld = rot.dot(self._vecUpLocal)
         rot = rot.dot(self._extViconToCamera)
         trans = np.array(trans).reshape(3, 1)
         try:
@@ -95,3 +104,9 @@ class CameraParameters():
 
     def get_fpv_res(self):
         return self._fpvRes
+
+    def get_look_vec(self):
+        return self._vecLookWorld
+
+    def get_up_vec(self):
+        return self._vecUpWorld

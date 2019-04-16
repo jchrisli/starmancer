@@ -4,6 +4,7 @@
 
 import numpy as np
 import functools
+import math
 
 class ActionPlanner():
     def __init__(self, lck, voim):
@@ -21,6 +22,7 @@ class ActionPlanner():
         self._arc_subgoal_completed_called = 0
         ## Anything above this height should be safe
         self._SAFE_Z = 1800
+        self._CAMERA_AXIS_TILT = 12 / 180.0 * math.pi
         self._voi_manager = voim
     
     def __reset_subgoals(self):
@@ -188,7 +190,7 @@ class ActionPlanner():
         If there is any potential of contact just raise the camera up and come down, thus 'on stilts'
         Otherwise go straight
     """
-    def generate_subgoals_voi_onstilts(self, position, curdir, voi, vdir):
+    def generate_subgoals_voi_onstilts(self, position, curdir, voi, vdir, lookatpoint = None):
         #with self._goal_lock:
         # self.__reset_subgoals()
         sub = []
@@ -197,8 +199,14 @@ class ActionPlanner():
         view_dist = voi['view_dist']
         voi_pos = voi['position3d']
         vdir = np.array(vdir)
+        voi_radius = voi['size3d']
         curdir = np.array(curdir)
-        end_target = voi_pos + view_dist * (-vdir)
+        # end_target = voi_pos + view_dist * (-vdir)
+        if lookatpoint is None:
+            end_target = voi_pos + view_dist * (-vdir)
+        else:
+            lookatpoint = np.array(lookatpoint)
+            end_target = lookatpoint + (view_dist - voi_radius) * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
         # prev_position = init_position
         ## Instead of turning to the target voi, turn to the average of begin and end look direction
         # look_dir = voi_pos - init_position
@@ -231,7 +239,7 @@ class ActionPlanner():
         self.__set_subgoals(sub)
         print(self._subgoals)
 
-    def generate_subgoals_voi_orbit(self, position, curdir, voi, vdir):
+    def generate_subgoals_voi_orbit(self, position, curdir, voi, vdir, lookatpoint = None):
         ROTATE_STEP = 330 
         #with self._goal_lock:
         # self.__reset_subgoals()
@@ -240,9 +248,14 @@ class ActionPlanner():
         init_position = np.array(position)
         view_dist = voi['view_dist']
         voi_pos = voi['position3d']
+        voi_radius = voi['size3d']
         vdir = np.array(vdir)
         curdir = np.array(curdir)
-        end_target = voi_pos + view_dist * (-vdir)
+        if lookatpoint is None:
+            end_target = voi_pos + view_dist * (-vdir)
+        else:
+            lookatpoint = np.array(lookatpoint)
+            end_target = lookatpoint + (view_dist - voi_radius) * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
         # prev_position = init_position
         ## Instead of turning to the target voi, turn to the average of begin and end look direction
         # look_dir = voi_pos - init_position

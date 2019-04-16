@@ -74,7 +74,7 @@ class TelloController():
         # Debug
         self.keyboard_listener = None
         self.debug = False
-        self.debugUI = True
+        self.debugUI = False
         self.right_click_count = 0
 
         # Tracking
@@ -203,8 +203,10 @@ class TelloController():
             if lookAtVoi is not None:
                 lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
                 # self.controller.approach_from(target, lookDir, lookAtVoi['view_dist'])
-                self.actionPlan.generate_subgoals_voi_orbit(self.controller.state[0:3], self.controller.state[3:], lookAtVoi, lookDir)
+                # self.actionPlan.generate_subgoals_voi_orbit(self.controller.state[0:3], self.controller.state[3:], lookAtVoi, lookDir)
+                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], lookAtVoi, lookDir)
 
+        ## This will be deprecated soon
         elif data['Type'] == 'focus':
             focusId = data['Id']
             print('Get focus command for %s' % focusId)
@@ -221,6 +223,15 @@ class TelloController():
                     self.actionPlan.generate_subgoals_voi_orbit(self.controller.state[0:3], self.controller.state[3:], focusVoi, viewDir)
                 else:
                     self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, viewDir)
+
+        elif data['Type'] == 'focus3d':
+            focusId = data['Id']
+            focusVoi = self.voiMng.get_voi(focusId)
+            vdir = data['LookDir']
+            vpoint = data['LookPoint']
+            print('Get focus 3d command for %d %s %s' % (focusId, str(vdir), str(vpoint)))
+            if focusVoi is not None:
+                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, vdir, vpoint)
 
 
     def __query_battery(self):
@@ -315,13 +326,22 @@ class TelloController():
             ## Update volume of interest calculator with camera position
             ## TODO: Note there might be threading issues here
             self.camParams.update_fpv_ext(rotation, translation)
+            camPosDict = {'type': 'cameraupdate', \
+                        'payload': {'Position': translation, \
+                                    'LookDir': self.camParams.get_look_vec().tolist(), \
+                                    'UpDir': self.camParams.get_up_vec().tolist()}, \
+                        }
+            self.command_transport.send(json.dumps(camPosDict))
+            #print(json.dumps(camPosDict))
+
             ## Get updated projected voi position and send it to the frontend
+            '''
             projected = self.voiMng.get_all_voi_projected()
             if projected is not None and len(projected) > 0:
                 projectedArr = map(lambda p: {'id': p[0], 'position_fpv': p[1], 'w_fpv': p[2], 'h_fpv': p[3]}, projected)
                 projectedDict = {'type': 'fpvupdate', 'payload': projectedArr}
                 self.command_transport.send(json.dumps(projectedDict))
-
+            '''
             signal = self.controller.generate_control_signal(observation)
                 
             ''' TODO: do not send control signal if the drone is in emergency state (how to tell?) '''
