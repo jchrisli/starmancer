@@ -169,7 +169,8 @@ class VoiCalulator():
             4 * f * y * valsin - \
             4 * H * r * valcos * valsin - \
             4 * f * r * valsin * valsin) ** 2))
-        return (r, h / 2) 
+        scale = 1.2
+        return (r * scale, h / 2 * scale) 
 
     '''
         Return a volume of interest

@@ -233,6 +233,13 @@ class TelloController():
             if focusVoi is not None:
                 self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, vdir, vpoint)
 
+        elif data['Type'] == 'move':
+            direction = data['Direction'] 
+            if direction == 'forward':
+                self.tello.move_forward(self._MANUAL_DIST)
+            else: 
+                self.tello.move_backward(self._MANUAL_DIST)
+           
 
     def __query_battery(self):
         print('Current battery level is %s' % self.tello.get_battery())
@@ -399,6 +406,7 @@ class TelloController():
                 self.tello.takeoff()
                 time.sleep(8)
                 self.tello.move_up(0.2)
+                ##self.tello.go(-15, -15, 0, 20)
 
             print("Preparing to open Vicon connection")
             self.vicon_connection.start()
