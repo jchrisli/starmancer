@@ -23,7 +23,8 @@ class CommandTransportUdp(threading.Thread):
     def run(self):
         ## Receive data from 
         self._isRunning = True
-        self._sock.bind(('127.0.0.1', self._recvPort))
+        ##self._sock.bind(('127.0.0.1', self._recvPort))
+        self._sock.bind(('0.0.0.0', self._recvPort))
         while self._isRunning:
             data, addr = self._sock.recvfrom(1024) # buffer size is 1024 bytes
             ## Data will be utf-8 encoded

@@ -72,10 +72,9 @@ class TelloController():
         self.situ = Situation()
 
         # Debug
-        self.keyboard_listener = None
         self.debug = False
         self.debugUI = False
-        self.right_click_count = 0
+        #self.right_click_count = 0
 
         # Tracking
         self.vicon_connection = ViconConnection(self.handle_vicon_data)
@@ -105,6 +104,8 @@ class TelloController():
         self._home_position = [0, -1500, 1200]
         self._home_dir = [0, 1, 0]
         self.voiMng.set_home_voi(self._home_position)
+
+        self._esc_pressed = 0
         self._keyboard_list = keyboard.Listener(on_press=self.key_pressed)
 
         ## Record roi data onto a file
@@ -150,7 +151,7 @@ class TelloController():
             self.tello.move_left(self._MANUAL_DIST)
         elif key.char == 'l':
             self.tello.move_right(self._MANUAL_DIST)
-        ## Homing after pressing 'h' three times
+        ## Homing after pressing 'h' two times
         elif key.char == 'h':
             self._home_pressed += 1
             if self._home_pressed > 1:
@@ -161,6 +162,11 @@ class TelloController():
                 self.command_transport.send(json.dumps(rmall_cmd))
                 ## Clear all existing vois
                 self.voiMng.clear_all_vois()
+        elif key == keyboard.Key.esc:
+            self._esc_pressed += 1
+            if self._esc_pressed > 1:
+                self._esc_pressed = 0
+                if
         
     def _recv_command_handler(self, data):
         '''
@@ -179,7 +185,6 @@ class TelloController():
             self._voi_file.write(','.join([str(voiC[0]), str(voiC[1]), str(voiC[2]), str(voiRTop), str(voiRFpv)]))
             # self._roi_history.write('%s %s %s %s %s' % (voiC[0], voi[1], voi[2], voiRTop, voiRFpv))
             entry = self.voiMng.add_voi(voiC, voiRTop, voiRFpv)
-            # self.controller.approach(voiC.tolist(), entry['view_dist'])
             ## Send voi info to frontend
             ## Convert it to a list
             #entryCopy = json.loads(json.dumps(entry))
@@ -191,10 +196,14 @@ class TelloController():
 
         elif data['Type'] == 'roitopdown':
             topRoi = data['TopdownRoi']
-            look = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
+            look, tlIntersection, xl, yl = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
             print('Get roi topdown')
             self.actionPlan.generate_subgoals_look(self.controller.state[0:3], look.tolist())
             # self.controller.look_at(look)
+            ## Notify the frontend to render a spotlight visualization
+            spotlightPl = {'topleft_ground': tlIntersection.tolist(), 'x_length': xl, 'y_length': yl}
+            spotlightCommand = {'type': 'spotlight', 'payload': spotlightPl}
+            self.command_transport.send(json.dumps(spotlightCommand))
         
         elif data['Type'] == 'look':
             lookAtId = data['Id']
@@ -202,8 +211,6 @@ class TelloController():
             lookAtVoi = self.voiMng.get_voi(lookAtId)
             if lookAtVoi is not None:
                 lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
-                # self.controller.approach_from(target, lookDir, lookAtVoi['view_dist'])
-                # self.actionPlan.generate_subgoals_voi_orbit(self.controller.state[0:3], self.controller.state[3:], lookAtVoi, lookDir)
                 self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], lookAtVoi, lookDir)
 
         ## This will be deprecated soon
@@ -232,6 +239,14 @@ class TelloController():
             print('Get focus 3d command for %d %s %s' % (focusId, str(vdir), str(vpoint)))
             if focusVoi is not None:
                 self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, vdir, vpoint)
+
+        elif data['Type'] == 'approach':
+            focusId = data['Id']
+            focusVoi = self.voiMng.get_voi(focusId)
+            if focusVoi is not None:
+                vdir = focusVoi['position3d'] - np.array(self.controller.state[0:3])
+                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, vdir)
+            
 
         elif data['Type'] == 'move':
             direction = data['Direction'] 

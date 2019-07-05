@@ -65,16 +65,32 @@ class VoiCalulator():
     def set_2d_roi_top(self, left, right, top, bottom, angle, t):
         self._roiTop = {'type': t, 'angle': angle, 'left': left, 'right': right, 'top': top, 'bottom': bottom}
 
-    def get_roi_top_ground_intersection(self, left, right, top, bottom):
-        roi = {'left': left, 'right': right, 'top': top, 'bottom': bottom}
-        o, d = self._get_roi_ray(roi, self._matTop)
-        o = o.flatten()
-        d = d.flatten()
+    def _get_ray_ground_intersection(self, rayori, raydir):
+        o = rayori.flatten()
+        d = raydir.flatten()
         n = np.array([0.0, 0.0, 1.0])
         p_n = np.array([0.0, 0.0, 0.0])
         t = n.dot(p_n - o) / (n.dot(d))
         intersection = o + t * d
         return intersection
+
+    def get_roi_top_ground_intersection(self, left, right, top, bottom):
+        roi = {'left': left, 'right': right, 'top': top, 'bottom': bottom}
+        o, d = self._get_roi_ray(roi, self._matTop)
+        ## Get the ray-ground intersection for three of the corners
+        threecorners = [np.array([[left], [top], [1]]), np.array([[right], [top], [1]]), np.array([[left], [bottom], [1]])]
+        threerays = map(lambda c: self._get_pixel_ray(c, self._matTop), threecorners)
+        threeintersections = map(lambda ray: self._get_ray_ground_intersection(ray[0], ray[1]), threerays)
+        xlen = numpy.linalg.norm(threeintersections[1] -  threeintersections[2])
+        ylen = numpy.linalg.norm(threeintersections[0] -  threeintersections[1])
+        return (self._get_ray_ground_intersection(o, d), threeintersections[0], xlen, ylen)
+
+    def _get_pixel_ray(self, pix, P):
+        M_inv = numpy.linalg.inv(P[:,:3])
+        p_4 = P[:, 3].reshape(3, 1)
+        direction = M_inv.dot(pix)
+        origin = - M_inv.dot(p_4)
+        return (origin, direction)
 
     '''
         Return a ray in 3d, direction determined by the pixel clicked
@@ -84,11 +100,7 @@ class VoiCalulator():
     '''
     def _get_roi_ray(self, roi, P):
         pixel = np.array([[(roi['left'] + roi['right']) / 2, (roi['top'] + roi['bottom']) / 2, 1]]).transpose()
-        M_inv = numpy.linalg.inv(P[:,:3])
-        p_4 = P[:, 3].reshape(3, 1)
-        direction = M_inv.dot(pixel)
-        origin = - M_inv.dot(p_4)
-        return (origin, direction)
+        return self._get_pixel_ray(pixel, P)
 
     '''
         Find a line sgetment that gives the shortest distance between two ray
@@ -169,7 +181,8 @@ class VoiCalulator():
             4 * f * y * valsin - \
             4 * H * r * valcos * valsin - \
             4 * f * r * valsin * valsin) ** 2))
-        scale = 1.2
+        #scale = 1.2
+        scale = 1.0
         return (r * scale, h / 2 * scale) 
 
     '''

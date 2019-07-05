@@ -35,8 +35,8 @@ class DistanceFlightController:
         '''
         self._dist_step_L = 1000
         self._dist_step_S = 283 ## sqrt(20^2*2)
-        # self._position_ready_dist = 370 ## sqrt(20^2*3)
-        self._yaw_threshold = 15
+        self._MIN_SAFE_GO_DIST = 340 ## sqrt(20^2*3)
+        self._yaw_threshold = 7.5
         ## Do not move if speed is below the cap
         self._still_speed_cap = 100
         ## Cap for yaw
@@ -170,8 +170,9 @@ class DistanceFlightController:
                     complete_crit = self._cur_goal['complete_crit']
                     goal_type = self._cur_goal['goal']
                     # print('Error is %s' % error_mag)
-                    if not complete_crit(error_mag):
-                        if goal_type == 'line':
+                    if goal_type == 'line':
+                        if not complete_crit(error_mag):
+                            '''
                             if error_mag > self._dist_step_L:
                                 ## in this case, the error is still quite large
                                 signal_xyz = np.transpose(np.array([error / error_mag * self._dist_step_L]))
@@ -179,25 +180,29 @@ class DistanceFlightController:
                             elif error_mag > self._dist_step_S:
                                 signal_xyz = np.transpose(np.array([error / error_mag * self._dist_step_S]))
                                 signal_xyz_speed = self._speed_S
+                            '''
+                            if error_mag > self._MIN_SAFE_GO_DIST * 2:
+                                ## Travel halfway
+                                signal_xyz = np.transpose(np.array([error / 2.0]))
+                                signal_xyz_speed = self._speed_L
+                            else:
+                                signal_xyz = np.transpose(np.array([error]))
+                                signal_xyz_speed = self._speed_S
                             motion_signal = signal_xyz
-                        elif goal_type == 'arc':
-                            signal_arc[:,0] = np.array(self._cur_goal['params'][0:3]) - now
-                            signal_arc[:,1] = np.array(self._target[0:3]) - now
-                            motion_signal = signal_arc
-                            signal_xyz_speed = self._speed_arc
-                    else:
-                        ##
-                        tar_dir_world = np.array([[self._target[3]], [self._target[4]], [self._target[5]]], dtype=np.float64)
-                        tar_dir = inv(R).dot(tar_dir_world) # in the local frame
-                        tar_dir[2,0] = 0
-                        tar_dir = tar_dir / np.linalg.norm(tar_dir)
-                        sign = 1
-                        if tar_dir[0, 0] < 0:
-                            sign = -1
-                        turning_angle = np.arccos(self._local_heading.dot(tar_dir.flatten())) * sign / np.pi * 180.0
-                        if abs(turning_angle) > self._yaw_threshold:
-                            ## Note negative input has to be reinterpreted as turning counter clockwise
-                            signal_yaw = turning_angle
+                        else:
+                            ##
+                            tar_dir_world = np.array([[self._target[3]], [self._target[4]], [self._target[5]]], dtype=np.float64)
+                            tar_dir = inv(R).dot(tar_dir_world) # in the local frame
+                            tar_dir[2,0] = 0
+                            tar_dir = tar_dir / np.linalg.norm(tar_dir)
+                            sign = 1
+                            if tar_dir[0, 0] < 0:
+                                sign = -1
+                            turning_angle = np.arccos(self._local_heading.dot(tar_dir.flatten())) * sign / np.pi * 180.0
+                            print('Turning %s' % turning_angle)
+                            if abs(turning_angle) > self._yaw_threshold:
+                                ## Note negative input has to be reinterpreted as turning counter clockwise
+                                signal_yaw = turning_angle
                     signal_trans = inv(R.dot(self._align_mat))
                     # local_signal = signal_trans.dot(signal_xyz)
                     local_signal = signal_trans.dot(motion_signal)
@@ -208,7 +213,6 @@ class DistanceFlightController:
                     ret = tuple([signal_xyz_speed] + local_signal.flatten('F').tolist() + [signal_yaw])
                     return ret
                 else:
-                    #print('Not still.')
                     return (None, None, None, None, None)
 
             except np.linalg.LinAlgError:

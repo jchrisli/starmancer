@@ -19,6 +19,7 @@ class ActionPlanner():
         self.__reset_subgoals()
         #self._voi_mana = voi_manager
         self._line_task_min_dist = 283
+        self._line_task_last_command_delivered = False
         self._arc_subgoal_completed_called = 0
         ## Anything above this height should be safe
         self._SAFE_Z = 1800
@@ -71,11 +72,16 @@ class ActionPlanner():
         else:
             return False
 
+    def set_line_subgoal_last_command_delivered(self, val):
+        self._line_task_last_command_delivered = val
+
+    def __line_subgoal_complete_crit(self, error):
+        return self._line_task_last_command_delivered
+
     def __generate_along_arc_subgoal(self, cur_position, target, center, r, vdir):
         mid_point = self.__along_arc(cur_position, target, center, r)
         return {'goal': 'arc', \
             'params': mid_point.tolist() + target.tolist() + vdir.tolist(), \
-            ## Always return true
             'complete_crit': self.__arc_subgoal_complete_crit}
 
     def __generate_along_line_subgoal(self, target, vdir):
@@ -83,6 +89,7 @@ class ActionPlanner():
                 'params': target.tolist() + vdir.tolist(), \
                 #'complete_crit': lambda x: np.norm(np.array(x) - target) < self._line_task_min_dist}
                 'complete_crit': lambda x: x < self._line_task_min_dist}
+                #'complete_crit': self.__line_subgoal_complete_crit}
 
     def __update_current_voi(self, voi):
         print('Update current voi %s' % str(voi))
@@ -199,11 +206,12 @@ class ActionPlanner():
         view_dist = voi['view_dist']
         voi_pos = voi['position3d']
         vdir = np.array(vdir)
+        vdir = vdir / np.linalg.norm(vdir)
         voi_radius = voi['size3d']
         curdir = np.array(curdir)
         # end_target = voi_pos + view_dist * (-vdir)
         if lookatpoint is None:
-            end_target = voi_pos + view_dist * (-vdir)
+            end_target = voi_pos + view_dist * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
         else:
             lookatpoint = np.array(lookatpoint)
             end_target = lookatpoint + (view_dist - voi_radius) * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
@@ -214,7 +222,8 @@ class ActionPlanner():
         if will_intersect:
             look_dir = voi_pos - init_position
         else:
-            look_dir = (vdir + curdir) / 2
+            # look_dir = (vdir + curdir) / 2
+            look_dir = end_target - init_position
         ## Set z to zero
         look_dir[2] = 0
         look_dir = look_dir / np.linalg.norm(look_dir)
