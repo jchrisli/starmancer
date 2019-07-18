@@ -1,15 +1,20 @@
 import tello
 from tello_control_ui import TelloUI
 from tello_controller import TelloController
+import sys
+from colorama import init
 
 
 def main():
+    init(strip=False)
 
     drone = tello.Tello('', 8889)  
-    ## Maybe we do not need to decode h264 locally, just forward it via gstreamer to the remote comp
     
-	# start the Tkinter mainloop
-    controller = TelloController(drone)
+    debug_ui = False
+    if len(sys.argv) > 1:
+        if sys.argv[1] == 'uionly':
+            debug_ui = True
+    controller = TelloController(drone, debug_ui)
     controller.start()
     #vplayer = TelloUI(drone,"./img/")
     #vplayer.root.mainloop() 

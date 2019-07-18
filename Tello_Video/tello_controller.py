@@ -2,13 +2,13 @@
 Controll One Tello
 """
 from tello import Tello
-#from DroneVision import DroneVision
 import threading
 #import cv2
 import time
 import json
 from networking.viconConnection import ViconConnection
-from flightcontrollers.distance_flight_controller import DistanceFlightController
+#from flightcontrollers.distance_flight_controller import DistanceFlightController
+from flightcontrollers.velocity_flight_controller import VelocityFlightController
 # Debug
 from pynput import keyboard
 # from pynput.mouse import Listener, Button
@@ -28,9 +28,10 @@ from utils.geometryUtils import CameraParameters
 from flightcontrollers.action_planner import ActionPlanner
 import numpy as np
 from pyquaternion import Quaternion
+from utils.geometryUtils import vec_to_mat
 
 class TelloController():
-    def __init__(self, tello):
+    def __init__(self, tello, debugUI = False):
         self.viewpointName = "FunkyTello"
         self.humanName = "Head1"
 
@@ -40,8 +41,11 @@ class TelloController():
 
         self.subgoalAccessLock = threading.Lock()
         self.actionPlan = ActionPlanner(self.subgoalAccessLock, self.voiMng)
+        self.state = []
         # Flight controller and its parameters
-        self.controller = DistanceFlightController(self.actionPlan)
+        # self.controller = DistanceFlightController(self.actionPlan)
+        self.controller = VelocityFlightController()
+        self.actionPlan.add_plan_subscriber(self.controller)
 
         # Vicon connection
         self.vicon_connection = None
@@ -73,11 +77,13 @@ class TelloController():
 
         # Debug
         self.debug = False
-        self.debugUI = False
+        self.debugUI = debugUI
+        self.packet_count = 0
         #self.right_click_count = 0
 
         # Tracking
         self.vicon_connection = ViconConnection(self.handle_vicon_data)
+        self.local_heading = np.array([0, 1, 0])
 
         # User interfaces
         # self.web_server = UiWebServer(self.web_server_port)    
@@ -85,6 +91,8 @@ class TelloController():
         # self.ws_server = UiWsHandler2(self.ws_port)
 
         self.tello = tello
+        ## From control signal to actual rc commands sent to the drone
+        self._CMD_SCALE = 100
         ## Check the connection status by querying tello status
         battery_level = self.tello.get_battery()
         if battery_level != 'none_response' or self.debugUI:
@@ -96,6 +104,9 @@ class TelloController():
         ## Threading
         self._recur_query_event = threading.Event()
         self._recur_query_thread = RecurringEvent(self._recur_query_event, self.__query_battery, 3)
+        self._controller_ready = True
+        self._controller_update_event = threading.Event()
+        self._controller_update_thread = RecurringEvent(self._controller_update_event, self.__reset_controller_update_flag, 0.3333)
 
         ## Manual control params
         self._MANUAL_DIST = 0.2 # Other APIs use meter as the unit
@@ -157,7 +168,7 @@ class TelloController():
             if self._home_pressed > 1:
                 self._home_pressed = 0
                 home_voi = self.voiMng.get_home_voi()
-                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], home_voi, self._home_dir)
+                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], home_voi, self._home_dir)
                 rmall_cmd = {'type': 'removeall'}
                 self.command_transport.send(json.dumps(rmall_cmd))
                 ## Clear all existing vois
@@ -166,7 +177,8 @@ class TelloController():
             self._esc_pressed += 1
             if self._esc_pressed > 1:
                 self._esc_pressed = 0
-                if
+                #if
+                self.tello.land()
         
     def _recv_command_handler(self, data):
         '''
@@ -198,7 +210,8 @@ class TelloController():
             topRoi = data['TopdownRoi']
             look, tlIntersection, xl, yl = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
             print('Get roi topdown')
-            self.actionPlan.generate_subgoals_look(self.controller.state[0:3], look.tolist())
+            self.actionPlan.generate_subgoals_look(self.state[0:3], look.tolist())
+            self.__get_goal_for_controller()
             # self.controller.look_at(look)
             ## Notify the frontend to render a spotlight visualization
             spotlightPl = {'topleft_ground': tlIntersection.tolist(), 'x_length': xl, 'y_length': yl}
@@ -211,7 +224,8 @@ class TelloController():
             lookAtVoi = self.voiMng.get_voi(lookAtId)
             if lookAtVoi is not None:
                 lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
-                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], lookAtVoi, lookDir)
+                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], lookAtVoi, lookDir)
+                self.__get_goal_for_controller()
 
         ## This will be deprecated soon
         elif data['Type'] == 'focus':
@@ -221,15 +235,15 @@ class TelloController():
             if focusVoi is not None:
                 ratioX = data['RatioX']
                 # ratioY = data['RatioY'] ## ignore y axis for now
-                camFacingDir = np.array(self.controller.state[3:])
+                camFacingDir = np.array(self.state[3:])
                 # camFacingDir = np.array(self.controller.state[3:])
                 angleFromCenter = (ratioX - 0.5) * np.pi
                 # print('Angle to rotate for focusing %s' % angleFromCenter)
                 viewDir = -(Quaternion(axis = [0.0, 0.0, 1.0], angle = angleFromCenter).rotate(-camFacingDir))
                 if ratioX > 0.75 or ratioX < 0.25:
-                    self.actionPlan.generate_subgoals_voi_orbit(self.controller.state[0:3], self.controller.state[3:], focusVoi, viewDir)
+                    self.actionPlan.generate_subgoals_voi_orbit(self.state[0:3], self.state[3:], focusVoi, viewDir)
                 else:
-                    self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, viewDir)
+                    self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, viewDir)
 
         elif data['Type'] == 'focus3d':
             focusId = data['Id']
@@ -238,14 +252,16 @@ class TelloController():
             vpoint = data['LookPoint']
             print('Get focus 3d command for %d %s %s' % (focusId, str(vdir), str(vpoint)))
             if focusVoi is not None:
-                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, vdir, vpoint)
+                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir, vpoint)
+                self.__get_goal_for_controller()
 
         elif data['Type'] == 'approach':
             focusId = data['Id']
             focusVoi = self.voiMng.get_voi(focusId)
             if focusVoi is not None:
-                vdir = focusVoi['position3d'] - np.array(self.controller.state[0:3])
-                self.actionPlan.generate_subgoals_voi_onstilts(self.controller.state[0:3], self.controller.state[3:], focusVoi, vdir)
+                vdir = focusVoi['position3d'] - np.array(self.state[0:3])
+                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir)
+                self.__get_goal_for_controller()
             
 
         elif data['Type'] == 'move':
@@ -259,6 +275,9 @@ class TelloController():
     def __query_battery(self):
         print('Current battery level is %s' % self.tello.get_battery())
         # self.tello.send_command('command')
+
+    def __reset_controller_update_flag(self):
+        self._controller_ready = True
 
     def handle_ws_message(self, action, data):
         if action == 'set_vp':
@@ -299,12 +318,22 @@ class TelloController():
     def __get_goal_for_controller(self):
         #with self.subgoalAccessLock:
         n = iter(self.actionPlan).next()
-        self.controller.set_current_goal(n)
+        # self.controller.set_current_goal(n)
         if n is not None:
-            target = n['params'][-6:]
-            self.controller.set_target(target, time.time())
+            target_pos = n['params'][-6:]
+            target_vel = None
+            expected_time = n['exp_time']
+            self.controller.ntd = False
+            self.controller.set_target(target_pos, target_vel, expected_time)
+        else:
+            ## Reset controller
+            #self.controller.set_target(None, None, None)
+            self.controller.ntd = True
+
 
     def handle_vicon_data(self, data):
+        #self.packet_count += 1
+        #print('Controller packet %s' % self.packet_count)
         curr_time = time.time()
         if (self.start_time is None):
             self.start_time = curr_time
@@ -354,52 +383,63 @@ class TelloController():
                                     'UpDir': self.camParams.get_up_vec().tolist()}, \
                         }
             self.command_transport.send(json.dumps(camPosDict))
-            #print(json.dumps(camPosDict))
-
-            ## Get updated projected voi position and send it to the frontend
-            '''
-            projected = self.voiMng.get_all_voi_projected()
-            if projected is not None and len(projected) > 0:
-                projectedArr = map(lambda p: {'id': p[0], 'position_fpv': p[1], 'w_fpv': p[2], 'h_fpv': p[3]}, projected)
-                projectedDict = {'type': 'fpvupdate', 'payload': projectedArr}
-                self.command_transport.send(json.dumps(projectedDict))
-            '''
-            signal = self.controller.generate_control_signal(observation)
-                
-            ''' TODO: do not send control signal if the drone is in emergency state (how to tell?) '''
-            if not self.debugUI:
-                # if all signals are None, we do nothing
-                if (all([s is None for s in signal])):
-                    if(self.debug):
-                        self.i_pitch.append(0)
-                        self.i_roll.append(0)
-                else:
-                    # print('Signal is %s' % str(signal))
-                    ## Convert mm to cm, as the API uses cm
-                    if all([s == 0 for s in signal]):
-                        ## Subgoal achieved, fetch the next goal and set target
-                        self.__get_goal_for_controller()
+            # signal = self.controller.generate_control_signal(observation)
+            ## Only calculate control signal every 300ms
+            if self._controller_ready:
+                self._controller_ready = False
+                R = vec_to_mat(observation[3:])
+                yaw_dir = R.dot(np.transpose(np.array([self.local_heading])))
+                self.state = list(observation[:3]) + yaw_dir.flatten().tolist()
+                #print('observation is %s' % str(observation))
+                #print('yawdir is %s' % str(yaw_dir))
+                #print('Drone state is %s' % str(self.state))
+                control_ret, signal = self.controller.odom_callback(observation, self.debugUI)
+                    
+                ''' TODO: do not send control signal if the drone is in emergency state (how to tell?) '''
+                if not self.debugUI:
+                    # if all signals are None, we do nothing
+                    #if (all([s is None for s in signal])):
+                    #    if(self.debug):
+                    #        self.i_pitch.append(0)
+                    #        self.i_roll.append(0)
+                    #else:
+                        # print('Signal is %s' % str(signal))
+                        #if all([s == 0 for s in signal]):
                         # self.vicon_timestamp = time.time()
-                        return
-                    signal_in_cm = [int(s / 10) for s in signal[:-1]] + [int(signal[-1])]
-
-                    if len(signal_in_cm) == 5:
-                        ## control signal for line goal
-                        (pos_speed, x_input, y_input, z_input, yaw_input) = signal_in_cm
-                        #if(self.debug):
-                        #    self.i_pitch.append(yaw_input)
-                        #    self.i_roll.append(y_input)
-                        if pos_speed != 0:
-                            self.tello.go(x_input, y_input, z_input, pos_speed)
+                    if control_ret == 1:
+                        # Took too long, mission aborted
+                        print('Timeout. Mission aborted.')
+                        self.tello.rc(0, 0, 0, 0)
+                        # self.tello.land()
                     else:
-                        (arc_speed, x1, y1, z1, x2, y2, z2, yaw_input) = signal_in_cm
-                        if arc_speed != 0:
-                            self.tello.curve(x1, y1, z1, x2, y2, z2, arc_speed)
+                        # Mission in progress
+                        print('Control signal is %s' % str(signal))
+                        self.tello.rc(signal[0], signal[1], signal[2], -signal[3])
+                else:
+                    if control_ret == 1:
+                        ## Subgoal achieved, fetch the next goal and set target
+                        #print('Fetch next goal')
+                        self.__get_goal_for_controller()
+                ## Convert mm to cm, as the API uses cm
+                # signal_in_cm = [int(s / 10) for s in signal[:-1]] + [int(signal[-1])]
 
-                    if yaw_input > 0:
-                        self.tello.rotate_cw(yaw_input)
-                    elif yaw_input < 0:
-                        self.tello.rotate_ccw(-yaw_input)
+                #if len(signal_in_cm) == 5:
+                #    ## control signal for line goal
+                #    (pos_speed, x_input, y_input, z_input, yaw_input) = signal_in_cm
+                    #if(self.debug):
+                    #    self.i_pitch.append(yaw_input)
+                    #    self.i_roll.append(y_input)
+                #    if pos_speed != 0:
+                #        self.tello.go(x_input, y_input, z_input, pos_speed)
+                #else:
+                #    (arc_speed, x1, y1, z1, x2, y2, z2, yaw_input) = signal_in_cm
+                #    if arc_speed != 0:
+                #        self.tello.curve(x1, y1, z1, x2, y2, z2, arc_speed)
+
+                #if yaw_input > 0:
+                #    self.tello.rotate_cw(yaw_input)
+                #elif yaw_input < 0:
+                #    self.tello.rotate_ccw(-yaw_input)
                     
         elif name == self.humanName:
             '''
@@ -437,6 +477,7 @@ class TelloController():
             self.command_transport.start()
 
             self._recur_query_thread.start()
+            self._controller_update_thread.start()
 
             # self.mouse_listener = Listener(
             #                 on_move=None,

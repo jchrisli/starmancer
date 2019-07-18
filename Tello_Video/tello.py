@@ -218,6 +218,9 @@ class Tello:
         self.response = None
 
         return response
+
+    def send_command_noreply(self, command):
+        self.socket.sendto(command.encode('utf-8'), self.tello_address)
     
     def set_abort_flag(self):
         """
@@ -527,3 +530,9 @@ class Tello:
             Fly along an arc defined by the current position, (x1, y1, z1), (x2, y2, z2)
         '''
         return self.send_command('curve %s %s %s %s %s %s %s' % (x1, y1, z1, x2, y2, z2, speed))
+
+    '''
+        Forward-backward, left-right, up-down
+    '''
+    def rc(self, roll, pitch, thrust, yaw):
+        return self.send_command_noreply('rc %s %s %s %s' % (int(roll * 100), int(pitch * 100), int(thrust * 100), int(yaw * 100)))

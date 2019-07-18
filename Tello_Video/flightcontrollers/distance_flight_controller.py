@@ -141,7 +141,6 @@ class DistanceFlightController:
             self._last_timestamp = curr_time
         ''' This IS actually distance '''
         signal_xyz = np.zeros((3, 1))
-        signal_arc = np.zeros((3, 2))
         motion_signal = np.zeros((3, 1))
         signal_yaw = 0
         signal_xyz_speed = 0

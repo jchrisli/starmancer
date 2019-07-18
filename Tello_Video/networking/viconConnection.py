@@ -20,12 +20,15 @@ class ViconConnection:
         self._receive_socket.bind(('0.0.0.0', int(self._vicon_udp_port)))
         self._listener_thread = threading.Thread(target=self.listen)
         self._listener_thread.start()
+        self._packet_count = 0
         
     # keep listening to the local socket
     def listen(self):
         while self._is_listening:
             try:
                 data = self._receive_socket.recv(66000)
+                self._packet_count += 1
+                #print('UDP received %s' % self._packet_count)
                 self._data_handler(data)
             except socket.timeout:
                 print("Vicon connection timeout - trying again")
