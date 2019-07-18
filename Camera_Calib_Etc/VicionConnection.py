@@ -23,11 +23,10 @@ class ViconConnection:
         
     # keep listening to the local socket
     def listen(self):
-
         while self._is_listening:
             try:
                 data = self._receive_socket.recv(66000)
-                self._is_listening = self._data_handler(data)
+                self._data_handler(data)
             except socket.timeout:
                 print("Vicon connection timeout - trying again")
             except Exception as e:
@@ -36,12 +35,15 @@ class ViconConnection:
         print("Vicon connection disconnecting")
         self.disconnect()
 
+    def stop_listen(self):
+        self._is_listening = False
+
     def disconnect(self):
         # self._is_listening = False
         try:
             self._receive_socket.close()
-        except:
-            pass
+        except Exception as e:
+            print(traceback.format_exc())
 
     def wait(self):
         self._listener_thread.join()

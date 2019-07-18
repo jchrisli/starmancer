@@ -5,6 +5,8 @@ from VicionConnection import ViconConnection
 import json
 import yaml
 import time
+from recurringEvent import RecurringEvent
+import threading
 
 # # termination criteria
 # # criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -33,21 +35,21 @@ import time
 
 class FindExtrinsicInVicon():
     def __init__(self):
-        self.model_name = 'Caliboard1'
+        self.model_name = 'Caliboard2'
         self.cycle = 50 ## Take a photo and find corners every <cycle> vicon packete 
         self.cycle_count = 0
         self.frame_needed = 20 ## Number of valid frames needed for calibration
         self.frame_count = 0
-        self.grid_size = 23.5 ## mm 
-        self.viconConn = ViconConnection(self._handle_vicon_data)
+        self.grid_size = 24.5 ## mm 
+        self.viconConn = ViconConnection(self._handle_vicon_no_processing)
         self.board_size = (9, 6)
         self.objp_local = np.zeros((np.prod(self.board_size), 3), np.float32)
         #self.objp_local = np.zeros((1, 3), np.float32)
         #self.objp_local[0, 0] = self.grid_size
         #self.objp_local[0, 1] = self.grid_size
         combination = np.mgrid[1 : self.board_size[0] + 1, 1 : self.board_size[1] + 1].T.reshape(-1,2)
-        self.objp_local[:, 0] = combination[:, 1] * self.grid_size 
-        self.objp_local[:, 1] = combination[:, 0] * self.grid_size
+        self.objp_local[:, 0] = np.flip(combination[:, 1])* self.grid_size 
+        self.objp_local[:, 1] = combination[:, 0] * self.grid_size#
         self.source = None
         self.objpoints = []
         self.imgpoints = []
@@ -56,6 +58,12 @@ class FindExtrinsicInVicon():
                                         [0.0, 0.0, 1.0]], np.float32)
         self.dist_co = np.array([0.07898490583963713, -0.050094270025822, -0.006732628640991619, 
                                 0.0014357674069558882, -0.20715099275443166], np.float32)
+
+        ## For the no processing method
+        self.recent_pose_msg = ''
+        #self.fetch_img_evt = threading.Event()
+        #self.fetch_img_thread = RecurringEvent(self.fetch_img_evt, self.__grab_img_and_process, 1.0)
+        self.fetch_img_timer = threading.Timer(1.0, self.__grab_img_and_process)
         
     def _handle_vicon_data(self, data):
         self.cycle_count = self.cycle_count + 1
@@ -87,12 +95,12 @@ class FindExtrinsicInVicon():
                     if found == True:
                         #corners2 = cv.cornerSubPix(gray,corners, (11,11), (-1,-1), criteria)
                         self.frame_count = self.frame_count + 1
-                        print 'Collecting frame {0}'.format(self.frame_count)
+                        print('Collecting frame {0}'.format(self.frame_count))
                         ## Save to debug folder
                         term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
                         cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), term)
-                        #cv2.drawChessboardCorners(img, self.board_size, corners, found)
-                        #cv2.imwrite('debug/%04d.png' % self.frame_count, img)
+                        cv2.drawChessboardCorners(img, self.board_size, corners, found)
+                        cv2.imwrite('debug/%04d.png' % self.frame_count, img)
                         self.objpoints.append(objp_world)
                         #self.imgpoints.append(corners[0,:,:])
                         self.imgpoints.append(corners)
@@ -101,6 +109,50 @@ class FindExtrinsicInVicon():
                         if self.frame_count == self.frame_needed:
                             return False
         return True
+
+    def _handle_vicon_no_processing(self, data):
+            # First convert bytes to string
+            self.recent_pose_msg = data.decode("utf-8")
+            return True
+
+    def __grab_img_and_process(self):
+        ## Grab an image, get the corners, and associate them with the most recent object pose
+            retval, img = self.source.read()
+            if retval:
+                dataJ = json.loads(self.recent_pose_msg)
+                name = dataJ["Name"]
+                translation = dataJ["Translation"]
+                transMat = np.tile(np.array(translation, np.float32).reshape(3, 1), np.prod(self.board_size))
+                #transMat = np.array(translation, np.float32).reshape(3, 1)
+                #transMat = np.array(translation, np.float32).reshape(1, 3)
+                rotation = dataJ["Rotation"]
+                rotMat = np.array(rotation, np.float32).reshape(3,3)
+                if name != self.model_name:
+                    print('Error: data received for non-calibration object.')
+                else:
+                    objp_world = (rotMat.dot(self.objp_local.T) + transMat).T
+                    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                    # Find the chess board corners
+                    found, corners = cv2.findChessboardCorners(gray, self.board_size, cv2.CALIB_CB_FILTER_QUADS)
+                    # If found, add object points, image points (after refining them)
+                    if found == True:
+                        #corners2 = cv.cornerSubPix(gray,corners, (11,11), (-1,-1), criteria)
+                        print ('Collecting frame {0}'.format(self.frame_count))
+                        ## Save to debug folder
+                        term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+                        cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), term)
+                        cv2.drawChessboardCorners(img, self.board_size, corners, found)
+                        cv2.imwrite('debug/%04d.png' % self.frame_count, img)
+                        self.objpoints.append(objp_world)
+                        #self.imgpoints.append(corners[0,:,:])
+                        self.imgpoints.append(corners)
+                        #print('Corners are %s' % str(corners))
+                        self.frame_count += 1
+                    if self.frame_count < self.frame_needed:
+                        nxt_timer = threading.Timer(1.0, self.__grab_img_and_process)
+                        nxt_timer.start()
+                    else:
+                        self.viconConn.stop_listen()
 
     def Calibarte(self):
         print 'Starting camera ...'
@@ -112,8 +164,14 @@ class FindExtrinsicInVicon():
 
         print 'Starting Vicon listener ...'
         self.viconConn.start()
+        time.sleep(0.5)
+
+        print('Starting image capture timer ...')
+        self.fetch_img_timer.start()
+
         print 'Waiting to collect Vicon data ...'
         self.viconConn.wait()
+
         print 'Computing extrinsic matrix ...'
         self.objpoints_array = np.array(self.objpoints, np.float32).reshape(-1, 3)
         self.imgpoints_array = np.array(self.imgpoints, np.float32).reshape(-1, 2)
@@ -130,6 +188,7 @@ class FindExtrinsicInVicon():
 
 
 find = FindExtrinsicInVicon()
+time.sleep(5.0)
 find.Calibarte()
 
 
