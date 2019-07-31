@@ -125,7 +125,9 @@ class Tello:
             try:
                 res_string, ip = self.socket_video.recvfrom(2048)
                 #print('Bytes just received {0}'.format(len(res_string)))
-                packet_data += res_string
+                #packet_data += res_string
+
+                self.video_transport_udp.send(res_string)
                 # if num_packets == 0:
                 #     start_time = time.time()
                 # num_packets = num_packets + 1
@@ -133,7 +135,7 @@ class Tello:
                 #     print('Took {} ms to receive 200 packets'.format(str((time.time() - start_time) * 1000))) 
                 #     num_packets = 0
                 # end of frame
-                if len(res_string) != 1460:
+                #if len(res_string) != 1460:
                     #print('Bytes to decode {0}'.format(len(packet_data)))
                     #print(' '.join([str(x) for x in map(ord, packet_data[:14])]))
                     #for frame in self._h264_decode(packet_data):
@@ -142,10 +144,10 @@ class Tello:
                     #VideoTransportProtocol.broadcast_message(packet_data)
 
                     ## Send the video data through udp
-                    self.video_transport_udp.send(packet_data)
+                    #self.video_transport_udp.send(packet_data)
 
                     #self.video_sample_file.write(packet_data)
-                    packet_data = ""
+                    #packet_data = ""
 
             except socket.error as exc:
                 print ("Caught exception socket.error : %s" % exc)

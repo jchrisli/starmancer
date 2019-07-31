@@ -31,8 +31,8 @@ class VelocityFlightController:
     def __init__(self):
         self._x_controller = PidController2(False, 0.2 / 1000, 0.03 / 1000)
         self._y_controller = PidController2(False, 0.2 / 1000, 0.03 / 1000)
-        self._z_controller = PidController2(False, 0.2 / 1000, 0.03 / 1000)
-        self._yaw_controller = PidController2(True, 0.2, 0.0)
+        self._z_controller = PidController2(False, 0.20 / 1000, 0.03 / 1000)
+        self._yaw_controller = PidController2(True, 0.3, 0.0)
 
         self._target_pose = None
         self._target_vel = None # 4-tuple

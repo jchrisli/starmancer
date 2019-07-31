@@ -30,10 +30,12 @@ class CameraParameters():
                                     [0.0, 790.378055853906 / 4, 345.54398722442954 / 4], \
                                     [0.0, 0.0, 1.0]])
         ## This is someting 3 * 4 and constant
-        self._extMatTopR = np.array([[0, 1, 0], \
-                                    [1, 0, 0], \
-                                    [0, 0, -1]])
-        self._extMatTopT = np.array([[400.0], [0.0], [2600.0]])
+        #self._extMatTopR = np.array([[0, 1, 0], \
+        #                            [1, 0, 0], \
+        #                            [0, 0, -1]])
+        #self._extMatTopT = np.array([[400.0], [0.0], [2600.0]])
+        self._extMatTopR = np.array([[0.0178797,  -0.99970006, -0.01673636], [-0.76892453, -0.00304895, -0.63933229], [0.6390895, 0.02430007, -0.76874841]])
+        self._extMatTopT = np.array([[-112.05672, -162.7593, 3789.6638]]).T
         self._extMatTop = np.hstack((self._extMatTopR, self._extMatTopT))
         self._matTop = self._intMatTop.dot(np.hstack((self._extMatTopR, self._extMatTopT)))
         self._extViconToCamera = np.array([1, 0, 0, 0, 0, -1, 0, 1, 0]).reshape(3, 3, order='F')

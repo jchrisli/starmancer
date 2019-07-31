@@ -29,6 +29,7 @@ from flightcontrollers.action_planner import ActionPlanner
 import numpy as np
 from pyquaternion import Quaternion
 from utils.geometryUtils import vec_to_mat
+from utils.motion_filter import Freq, LowPassDynamicFilter
 
 class TelloController():
     def __init__(self, tello, debugUI = False):
@@ -78,13 +79,28 @@ class TelloController():
         # Debug
         self.debug = False
         self.debugUI = debugUI
-        self.packet_count = 0
         #self.right_click_count = 0
 
         # Tracking
         self.vicon_connection = ViconConnection(self.handle_vicon_data)
         self.local_heading = np.array([0, 1, 0])
+        # Tracking -- filtering
+        self.vicon_freq = Freq()
+        self.vicon_freq.set(45)
+        self.position_filter = LowPassDynamicFilter(self.vicon_freq)
+        self.rotation_filter = LowPassDynamicFilter(self.vicon_freq)
 
+        self.position_filter.set_cutoff_freq_low(5)
+        self.position_filter.set_cutoff_freq_high(5)
+        self.position_filter.set_velocity_low(10)
+        self.position_filter.set_velocity_high(10)
+
+        self.rotation_filter.set_cutoff_freq_low(5)
+        self.rotation_filter.set_cutoff_freq_high(5)
+        self.rotation_filter.set_velocity_low(10)
+        self.rotation_filter.set_velocity_high(10)
+        
+        self.fps_count = 0
         # User interfaces
         # self.web_server = UiWebServer(self.web_server_port)    
 
@@ -107,6 +123,7 @@ class TelloController():
         self._controller_ready = True
         self._controller_update_event = threading.Event()
         self._controller_update_thread = RecurringEvent(self._controller_update_event, self.__reset_controller_update_flag, 0.3333)
+        
 
         ## Manual control params
         self._MANUAL_DIST = 0.2 # Other APIs use meter as the unit
@@ -278,6 +295,9 @@ class TelloController():
 
     def __reset_controller_update_flag(self):
         self._controller_ready = True
+        ## also update vicon fps
+        self.vicon_freq.set(self.fps_count * 1 / 0.3333)
+        self.fps_count = 0
 
     def handle_ws_message(self, action, data):
         if action == 'set_vp':
@@ -332,8 +352,7 @@ class TelloController():
 
 
     def handle_vicon_data(self, data):
-        #self.packet_count += 1
-        #print('Controller packet %s' % self.packet_count)
+        self.fps_count += 1
         curr_time = time.time()
         if (self.start_time is None):
             self.start_time = curr_time
@@ -352,20 +371,13 @@ class TelloController():
         translation = dataJ["Translation"]
         rotation = dataJ["Rotation"]
         if name == self.viewpointName:
-            '''
-            # Do all transformation on the frontend
-            # Transform the vicon position into unity position
-            translation_unity = self.transformer.vicon2UnityPt(translation)
-            rotation_unity = self.transformer.vicon2UnityRot(rotation)
-            '''
 
-            # Send through websocket to the frontend 
-            #position_message = json.dumps({'type': 'current_vp', 'payload': {'translation': translation, 'rotation': rotation}})
-            #if self.ws_server.started:
-            #    self.ws_server.sendMessage(position_message)
             ### Update drone actor state
-            self.situ.get_actor('cam').set_position(translation)
-            self.situ.get_actor('cam').set_rotation(rotation)
+            #self.situ.get_actor('cam').set_position(translation)
+            #self.situ.get_actor('cam').set_rotation(rotation)
+
+            ## Filtering
+            #translation = self.position_filter.apply(translation)
 
             if(self.debug):
                 # Record data later to be plotted
