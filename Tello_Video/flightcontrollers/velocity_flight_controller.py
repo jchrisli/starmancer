@@ -1,6 +1,3 @@
-'''
-Note the standard ROS units for length and time are meters and seconds. The controller parameters may need some change.
-'''
 from pid import PidController2 
 import math
 import time
@@ -16,11 +13,54 @@ class DronePose():
         self.z = z
         self.yaw = yaw 
 
+    @staticmethod
+    def __normalized_angle(a):
+        if a > math.pi:
+            a -= 2 * math.pi
+        if a < -math.pi:
+            a += 2 * math.pi
+        return a
+
     def close_enough(self, pose, xyz_thresh, yaw_thresh):
         return abs(self.x - pose.x) < xyz_thresh and \
             abs(self.y -pose.y) < xyz_thresh and \
             abs(self.z -pose.z) < xyz_thresh and \
             abs(self.yaw -pose.yaw) < yaw_thresh
+
+    def vec_to(self, dp):
+        """Get the movement vector to another drone pose
+        
+        Arguments:
+            dp {DronePose} -- target drone pose
+        """
+        yawd = DronePose.__normalized_angle(dp.yaw - self.yaw)
+        return (dp.x - self.x, dp.y - self.y, dp.z - self.z, yawd)
+
+    def move(self, vel, t):
+        """[Change the current pose for time t with a specified velocity]
+        
+        Arguments:
+            vel {4-element tuple} -- (x, y, z, yaw)
+            t {number} -- time of movement
+        """
+        nx = self.x + vel[0] * t
+        ny = self.y + vel[1] * t
+        nz = self.z + vel[2] * t
+        yaw = DronePose.__normalized_angle(self.yaw + vel[3] * t)
+        return DronePose(nx, ny, nz, yaw)
+
+    def to_np_array(self):
+        return np.array(self)
+
+    def move_timed(self, target, total_time, elapsed_time): 
+        diff = self.vec_to(target)
+        t = min(elapsed_time / total_time, 1.0)
+        to_x = self.x + diff[0] * t
+        to_y = self.y + diff[1] * t
+        to_z = self.z + diff[2] * t
+        to_yaw = self.yaw + diff[3] * t
+        return DronePose(to_x, to_y, to_z, to_yaw)
+
 
 class VelocityFlightController:
 

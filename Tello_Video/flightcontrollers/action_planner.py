@@ -25,7 +25,8 @@ class ActionPlanner():
         self._SAFE_Z = 1800
         self._CAMERA_AXIS_TILT = 12 / 180.0 * math.pi
 
-        self._VEL = 100
+        self._VEL = 200
+        self._YAW_VEL = 60.0 / 180.0 * math.pi
 
         self._voi_manager = voim
         self._plan_subscriber = None
@@ -75,29 +76,14 @@ class ActionPlanner():
         else:
             return None
 
-    def __arc_subgoal_complete_crit(self, error):
-        self._arc_subgoal_completed_called += 1
-        if self._arc_subgoal_completed_called > 1:
-            self._arc_subgoal_completed_called = 0
-            return True
-        else:
-            return False
-
-    def __line_subgoal_complete_crit(self, error):
-        return self._line_task_last_command_delivered
-
-    def __generate_along_arc_subgoal(self, cur_position, target, center, r, vdir):
-        mid_point = self.__along_arc(cur_position, target, center, r)
-        return {'goal': 'arc', \
-            'params': mid_point.tolist() + target.tolist() + vdir.tolist(), \
-            'complete_crit': self.__arc_subgoal_complete_crit}
-
     def __generate_along_line_subgoal(self, target, vdir, etime):
-        return {'goal': 'line', \
+        return { #'goal': 'line', \
                 'params': target.tolist() + vdir.tolist(), \
                 #'complete_crit': lambda x: np.norm(np.array(x) - target) < self._line_task_min_dist}
-                'complete_crit': lambda x: x < self._line_task_min_dist,
-                'exp_time': etime}
+                #'complete_crit': lambda x: x < self._line_task_min_dist,
+                'exp_time': etime \
+                # 'speed': self._VEL
+                }
                 #'complete_crit': self.__line_subgoal_complete_crit}
 
     def __update_current_voi(self, voi):
@@ -207,10 +193,8 @@ class ActionPlanner():
         Otherwise go straight
     """
     def generate_subgoals_voi_onstilts(self, position, curdir, voi, vdir, lookatpoint = None):
-        #with self._goal_lock:
-        # self.__reset_subgoals()
         sub = []
-        now = time.time()
+        # now = time.time()
         # post_sub = []
         init_position = np.array(position)
         view_dist = voi['view_dist']
@@ -239,109 +223,46 @@ class ActionPlanner():
         look_dir = look_dir / np.linalg.norm(look_dir)
         #g_turn = self.__generate_along_line_subgoal(init_position, look_dir)
         #sub.append((g_turn, lambda : True))
-        ng_time = now
+        # Set the starting point to be the first subgoal, mark it with a negative time
+        first = self.__generate_along_line_subgoal(init_position, curdir, -1)
+        sub.append((first, lambda: True))
         # Get a straight path, and check if it intersect with any of the vois
-        if will_intersect:
-            ## so the path intersect with at least one of the vois, raise the camera to the safe height
-            up_target = init_position + np.array([0, 0, self._SAFE_Z - init_position[2]])
-            ng_time += (self._SAFE_Z - init_position[2]) / self._VEL
-            g_up = self.__generate_along_line_subgoal(up_target, look_dir, ng_time)
-            # prev_position = up_target
-            sub.append((g_up, lambda : True))
-            go_target = np.array([0, 0, self._SAFE_Z - end_target[2]]) + end_target
-            ng_time +=  np.linalg.norm(go_target - up_target) / self._VEL
-            g_go = self.__generate_along_line_subgoal(go_target, look_dir, ng_time)
-            sub.append((g_go, lambda : True))
-            ng_time += np.linalg.norm(end_target - go_target) / self._VEL
-            go_down = self.__generate_along_line_subgoal(end_target, vdir, ng_time)
-            sub.append((go_down, lambda : True))
-        else:
-            ## Since the path does not intersect with any of the vois, go ahead
-            ng_time += np.linalg.norm(end_target - init_position) / self._VEL
-            go_straight = self.__generate_along_line_subgoal(end_target, vdir, ng_time)
-            sub.append((go_straight, lambda : True))
-        self.__set_subgoals(sub)
-        print(self._subgoals)
-
-    def generate_subgoals_voi_orbit(self, position, curdir, voi, vdir, lookatpoint = None):
-        ROTATE_STEP = 330 
-        #with self._goal_lock:
-        # self.__reset_subgoals()
-        sub = []
-        # post_sub = []
-        init_position = np.array(position)
-        view_dist = voi['view_dist']
-        voi_pos = voi['position3d']
-        voi_radius = voi['size3d']
-        vdir = np.array(vdir)
-        curdir = np.array(curdir)
-        if lookatpoint is None:
-            end_target = voi_pos + view_dist * (-vdir)
-        else:
-            lookatpoint = np.array(lookatpoint)
-            end_target = lookatpoint + (view_dist - voi_radius) * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
-        # prev_position = init_position
-        ## Instead of turning to the target voi, turn to the average of begin and end look direction
-        # look_dir = voi_pos - init_position
-        will_intersect = self._voi_manager.test_path_against_all_voi(init_position, end_target)
         #if will_intersect:
-        look_dir = voi_pos - init_position
+        #    ## so the path intersect with at least one of the vois, raise the camera to the safe height
+        #    up_target = init_position + np.array([0, 0, self._SAFE_Z - init_position[2]])
+        #    ng_time += (self._SAFE_Z - init_position[2]) / self._VEL
+        #    g_up = self.__generate_along_line_subgoal(up_target, look_dir, ng_time)
+        #    # prev_position = up_target
+        #    sub.append((g_up, lambda : True))
+        #    go_target = np.array([0, 0, self._SAFE_Z - end_target[2]]) + end_target
+        #    ng_time +=  np.linalg.norm(go_target - up_target) / self._VEL
+        #    g_go = self.__generate_along_line_subgoal(go_target, look_dir, ng_time)
+        #    sub.append((g_go, lambda : True))
+        #    ng_time += np.linalg.norm(end_target - go_target) / self._VEL
+        #    go_down = self.__generate_along_line_subgoal(end_target, vdir, ng_time) #    sub.append((go_down, lambda : True))
         #else:
-        #    look_dir = (vdir + curdir) / 2
-        ## Set z to zero
-        look_dir[2] = 0
-        look_dir = look_dir / np.linalg.norm(look_dir)
-        g_turn = self.__generate_along_line_subgoal(init_position, look_dir)
-        sub.append((g_turn, lambda : True))
-        # Get a straight path, and check if it intersect with any of the vois
-        if will_intersect:
-            ## so the path intersect with at least one of the vois, raise the camera to the safe height
-            up_target = init_position + np.array([0, 0, self._SAFE_Z - init_position[2]])
-            g_up = self.__generate_along_line_subgoal(up_target, look_dir)
-            # prev_position = up_target
-            sub.append((g_up, lambda : True))
-            go_target = np.array([0, 0, self._SAFE_Z - end_target[2]]) + end_target
-            g_go = self.__generate_along_line_subgoal(go_target, look_dir)
-            sub.append((g_go, lambda : True))
-            go_down = self.__generate_along_line_subgoal(end_target, vdir)
-            sub.append((go_down, lambda : True))
-        else:
-            ## Since the path does not intersect with any of the vois, go ahead
-            # go_straight = self.__generate_along_line_subgoal(end_target, vdir)
-            # sub.append((go_straight, lambda : True))
-            ## Chop the path into segments
-            path = end_target - init_position
-            path_dist = np.linalg.norm(path)
-            path_dir = path / path_dist 
-            n_segments = int(path_dist / ROTATE_STEP)
-            if n_segments > 0:
-                waypoints = [init_position + i * ROTATE_STEP * path_dir for i in range(1, n_segments + 1)]
-                ## Do naive linear interpolation
-                waypoint_dirs = [look_dir * (1 - 1.0 / n_segments * i) + vdir * (1.0 / n_segments) * i \
-                    for i in range(1, n_segments + 1)] 
-                goal_parameters = zip(waypoints, waypoint_dirs)
-                waypoint_subgoals = [self.__generate_along_line_subgoal(waypoint, waypoint_dir) \
-                     for (waypoint, waypoint_dir) in goal_parameters]
-                for waypoint_subgoal in waypoint_subgoals:
-                    sub.append((waypoint_subgoal, lambda: True))
-        go_there = self.__generate_along_line_subgoal(end_target, vdir)
-        sub.append((go_there, lambda : True))
+        ## Since the path does not intersect with any of the vois, go ahead
+        ng_time = np.linalg.norm(end_target - init_position) / self._VEL
+        go_straight = self.__generate_along_line_subgoal(end_target, vdir, ng_time)
+        sub.append((go_straight, lambda : True))
         self.__set_subgoals(sub)
         print(self._subgoals)
-
 
     '''
         Generate a subgoal for turning to look at a point while staying place
     '''
-    def generate_subgoals_look(self, position, look_pos):
-        now = time.time()
+    def generate_subgoals_look(self, position, cdir, look_pos):
+        sub = []
         position = np.array(position)
         look_dir = np.array(look_pos) - position
+        curr_dir = np.array(cdir)
+        first = self.__generate_along_line_subgoal(position, curr_dir, -1)
+        sub.append((first, lambda: True))
         look_dir[2] = 0
         look_dir = look_dir / np.linalg.norm(look_dir)
-        g_look = self.__generate_along_line_subgoal(position, look_dir, now)
+        g_look = self.__generate_along_line_subgoal(position, look_dir, 2.0) # ideally we should calculate this, but use 0.5 for now
         # with self._goal_lock:
-        sub = [(g_look, lambda : True)]
+        sub.append((g_look, lambda : True))
         self.__set_subgoals(sub)
         print(self._subgoals)
     

@@ -8,7 +8,8 @@ import time
 import json
 from networking.viconConnection import ViconConnection
 #from flightcontrollers.distance_flight_controller import DistanceFlightController
-from flightcontrollers.velocity_flight_controller import VelocityFlightController
+#from flightcontrollers.velocity_flight_controller import VelocityFlightController
+from flightcontrollers.velocity_flight_controller_con import VelocityFlightControllerCon
 # Debug
 from pynput import keyboard
 # from pynput.mouse import Listener, Button
@@ -45,7 +46,7 @@ class TelloController():
         self.state = []
         # Flight controller and its parameters
         # self.controller = DistanceFlightController(self.actionPlan)
-        self.controller = VelocityFlightController()
+        self.controller = VelocityFlightControllerCon()
         self.actionPlan.add_plan_subscriber(self.controller)
 
         # Vicon connection
@@ -122,9 +123,8 @@ class TelloController():
         self._recur_query_thread = RecurringEvent(self._recur_query_event, self.__query_battery, 3)
         self._controller_ready = True
         self._controller_update_event = threading.Event()
-        self._controller_update_thread = RecurringEvent(self._controller_update_event, self.__reset_controller_update_flag, 0.3333)
+        self._controller_update_thread = RecurringEvent(self._controller_update_event, self.__reset_controller_update_flag, 0.2)
         
-
         ## Manual control params
         self._MANUAL_DIST = 0.2 # Other APIs use meter as the unit
         self._MANUAL_DEG = 10
@@ -227,8 +227,8 @@ class TelloController():
             topRoi = data['TopdownRoi']
             look, tlIntersection, xl, yl = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
             print('Get roi topdown')
-            self.actionPlan.generate_subgoals_look(self.state[0:3], look.tolist())
-            self.__get_goal_for_controller()
+            self.actionPlan.generate_subgoals_look(self.state[0:3], self.state[3:], look.tolist())
+            # self.__get_goal_for_controller()
             # self.controller.look_at(look)
             ## Notify the frontend to render a spotlight visualization
             spotlightPl = {'topleft_ground': tlIntersection.tolist(), 'x_length': xl, 'y_length': yl}
@@ -242,25 +242,7 @@ class TelloController():
             if lookAtVoi is not None:
                 lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
                 self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], lookAtVoi, lookDir)
-                self.__get_goal_for_controller()
-
-        ## This will be deprecated soon
-        elif data['Type'] == 'focus':
-            focusId = data['Id']
-            print('Get focus command for %s' % focusId)
-            focusVoi = self.voiMng.get_voi(focusId)
-            if focusVoi is not None:
-                ratioX = data['RatioX']
-                # ratioY = data['RatioY'] ## ignore y axis for now
-                camFacingDir = np.array(self.state[3:])
-                # camFacingDir = np.array(self.controller.state[3:])
-                angleFromCenter = (ratioX - 0.5) * np.pi
-                # print('Angle to rotate for focusing %s' % angleFromCenter)
-                viewDir = -(Quaternion(axis = [0.0, 0.0, 1.0], angle = angleFromCenter).rotate(-camFacingDir))
-                if ratioX > 0.75 or ratioX < 0.25:
-                    self.actionPlan.generate_subgoals_voi_orbit(self.state[0:3], self.state[3:], focusVoi, viewDir)
-                else:
-                    self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, viewDir)
+                # self.__get_goal_for_controller()
 
         elif data['Type'] == 'focus3d':
             focusId = data['Id']
@@ -270,7 +252,7 @@ class TelloController():
             print('Get focus 3d command for %d %s %s' % (focusId, str(vdir), str(vpoint)))
             if focusVoi is not None:
                 self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir, vpoint)
-                self.__get_goal_for_controller()
+                # self.__get_goal_for_controller()
 
         elif data['Type'] == 'approach':
             focusId = data['Id']
@@ -278,7 +260,7 @@ class TelloController():
             if focusVoi is not None:
                 vdir = focusVoi['position3d'] - np.array(self.state[0:3])
                 self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir)
-                self.__get_goal_for_controller()
+                # self.__get_goal_for_controller()
             
 
         elif data['Type'] == 'move':
@@ -288,7 +270,6 @@ class TelloController():
             else: 
                 self.tello.move_backward(self._MANUAL_DIST)
            
-
     def __query_battery(self):
         print('Current battery level is %s' % self.tello.get_battery())
         # self.tello.send_command('command')
@@ -296,59 +277,23 @@ class TelloController():
     def __reset_controller_update_flag(self):
         self._controller_ready = True
         ## also update vicon fps
-        self.vicon_freq.set(self.fps_count * 1 / 0.3333)
+        self.vicon_freq.set(self.fps_count * 1 / 0.2)
         self.fps_count = 0
 
-    def handle_ws_message(self, action, data):
-        if action == 'set_vp':
-            x = data['x']
-            y = data['y']
-            z = data['z']
-            yaw_x = data['yaw_x']
-            yaw_y = data['yaw_y']
-            yaw_z = data['yaw_z']
-            # Transform from Unity space to Vicon space 
-            #print('Received on WebSocket {0} {1} {2} {3} {4} {5}'.format(str(x), str(y), str(z), str(yaw_x), str(yaw_y), str(yaw_z)))
-            #unity_pos = np.array([x, y, z, 1], dtype=np.float64)
-            pos = [x, y, z]
-            #vicon_pos = self.transformer.unity2ViconPt(unity_pos)
-            #unity_dir = np.array([yaw_x, yaw_y, yaw_z, 1], dtype=np.float64)
-            direction = [yaw_x, yaw_y, yaw_z]
-            # color_print('Dir from Unity {0}'.format(str(unity_dir)), 'WARN')
-            # vicon_dir = self.transformer.unity2ViconDir(unity_dir)
-            # Calculate yaw from direction vector
-        
-            #target_position = vicon_pos + vicon_dir
-            # color_print('Going to {0}'.format(str(target_position)), 'ERROR')
-            target_position = pos + direction
-            self.controller.set_target(target_position, time.time())
-        elif action == 'local_vp':
-            '''
-             So the drone is going to take the viewpoint of the local person
-            '''
-            human_actor_vp = self.situ.get_anothers_viewpoint('human')
-            self.controller.set_target(human_actor_vp, time.time())
-            # color_print('Set local target at {0}'.format(human_actor_vp), type="WARN")
-        elif action == 'set_vp_height':
-            height = data['height']
-            self.controller.set_target_z(height, time.time())
-        elif action == 'land':
-            self.tello.land()
-
-    def __get_goal_for_controller(self):
-        #with self.subgoalAccessLock:
-        n = iter(self.actionPlan).next()
-        # self.controller.set_current_goal(n)
-        if n is not None:
-            target_pos = n['params'][-6:]
-            target_vel = None
-            expected_time = n['exp_time']
-            self.controller.ntd = False
-            self.controller.set_target(target_pos, target_vel, expected_time)
-        else:
-            ## Reset controller
-            #self.controller.set_target(None, None, None)
-            self.controller.ntd = True
+    #def __get_goal_for_controller(self):
+    #    #with self.subgoalAccessLock:
+    #    n = iter(self.actionPlan).next()
+    #    # self.controller.set_current_goal(n)
+    #    if n is not None:
+    #        target_pos = n['params'][-6:]
+    #        target_vel = None
+    #        expected_time = n['exp_time']
+    #        self.controller.ntd = False
+    #        self.controller.set_target(target_pos, target_vel, expected_time)
+    #    else:
+    #        ## Reset controller
+    #        #self.controller.set_target(None, None, None)
+    #        self.controller.ntd = True
 
 
     def handle_vicon_data(self, data):
@@ -409,15 +354,6 @@ class TelloController():
                     
                 ''' TODO: do not send control signal if the drone is in emergency state (how to tell?) '''
                 if not self.debugUI:
-                    # if all signals are None, we do nothing
-                    #if (all([s is None for s in signal])):
-                    #    if(self.debug):
-                    #        self.i_pitch.append(0)
-                    #        self.i_roll.append(0)
-                    #else:
-                        # print('Signal is %s' % str(signal))
-                        #if all([s == 0 for s in signal]):
-                        # self.vicon_timestamp = time.time()
                     if control_ret == 1:
                         # Took too long, mission aborted
                         print('Timeout. Mission aborted.')
@@ -425,13 +361,13 @@ class TelloController():
                         # self.tello.land()
                     else:
                         # Mission in progress
-                        print('Control signal is %s' % str(signal))
+                        # print('Control signal is %s' % str(signal))
                         self.tello.rc(signal[0], signal[1], signal[2], -signal[3])
                 else:
+                    # Took too long, mission aborted
                     if control_ret == 1:
-                        ## Subgoal achieved, fetch the next goal and set target
-                        #print('Fetch next goal')
-                        self.__get_goal_for_controller()
+                        pass
+                        # self.__get_goal_for_controller()
                 ## Convert mm to cm, as the API uses cm
                 # signal_in_cm = [int(s / 10) for s in signal[:-1]] + [int(signal[-1])]
 

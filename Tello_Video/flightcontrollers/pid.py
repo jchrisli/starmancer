@@ -1,7 +1,7 @@
 import math
 
 class PidController:
-    def __inti__(self, angle, Kp, Ki, Kd):
+    def __init__(self, angle, Kp, Ki, Kd):
         self.angle_ = angle # True if we're controlling an angle [-pi, pi]
         self.target_ = 0
         self.prev_error_ = 0
