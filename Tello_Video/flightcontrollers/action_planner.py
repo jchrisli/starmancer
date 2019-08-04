@@ -6,6 +6,7 @@ import numpy as np
 import functools
 import math
 import time
+from pyquaternion import Quaternion
 
 class ActionPlanner():
     def __init__(self, lck, voim):
@@ -76,12 +77,13 @@ class ActionPlanner():
         else:
             return None
 
-    def __generate_along_line_subgoal(self, target, vdir, etime):
+    def __generate_along_line_subgoal(self, target, vdir, etime, timeout_behavior = 'abort'):
         return { #'goal': 'line', \
                 'params': target.tolist() + vdir.tolist(), \
                 #'complete_crit': lambda x: np.norm(np.array(x) - target) < self._line_task_min_dist}
                 #'complete_crit': lambda x: x < self._line_task_min_dist,
-                'exp_time': etime \
+                'exp_time': etime, \
+                'timeout_b': timeout_behavior \
                 # 'speed': self._VEL
                 }
                 #'complete_crit': self.__line_subgoal_complete_crit}
@@ -265,6 +267,33 @@ class ActionPlanner():
         sub.append((g_look, lambda : True))
         self.__set_subgoals(sub)
         print(self._subgoals)
+
+    def generate_subgoals_manual_orbit(self, position, cdir, voi, lr):
+        sub = []
+        position = np.array(position)
+        curr_dir = np.array(cdir)
+        first = self.__generate_along_line_subgoal(position, curr_dir, -1)
+        sub.append((first, lambda: True))
+        voi_center = voi['position3d']
+        offset = position - voi_center
+        orbit_center = np.array([voi_center[0], voi_center[1], position[2]])
+        # Rotate the center from center to the drone to generate other waypoints
+        if lr == 'l':
+            d = -1
+        else:
+            d = 1
+        rqs = [Quaternion(axis = [0, 0, 1], angle = d * i * math.pi / 4) for i in range(1, 5)]
+        waypoints_offsets = map(lambda rq: rq.rotate(offset), rqs)
+        waypoints = map(lambda offset: offset + voi_center, waypoints_offsets)
+        for wp in waypoints:
+            wp_dir = orbit_center - wp
+            r = np.linalg.norm(wp_dir)
+            t = math.sqrt(2) * r / self._VEL
+            wp_dir = wp_dir / r
+            wp_goal = self.__generate_along_line_subgoal(wp, wp_dir, t, 'continue')
+            sub.append((wp_goal, lambda: True))
+        self.__set_subgoals(sub)
+        print(self._subgoals)
     
     '''
         Simply go to a position and turn to a direction
@@ -279,6 +308,9 @@ class ActionPlanner():
 
     def generate_subgoals_appraoch(self, cur_position, cur_dir, voi):
         self.generate_subgoals_voi_onstilts(cur_position, cur_dir, voi, cur_dir)
+
+    def abort_subgoals(self):
+        self.__set_subgoals([])
 
     def next(self):
         if self._post_subgoal_func is not None:

@@ -28,7 +28,7 @@ import copy
 from utils.geometryUtils import CameraParameters
 from flightcontrollers.action_planner import ActionPlanner
 import numpy as np
-from pyquaternion import Quaternion
+# from pyquaternion import Quaternion
 from utils.geometryUtils import vec_to_mat
 from utils.motion_filter import Freq, LowPassDynamicFilter
 
@@ -132,6 +132,20 @@ class TelloController():
         self._home_position = [0, -1500, 1200]
         self._home_dir = [0, 1, 0]
         self.voiMng.set_home_voi(self._home_position)
+        self._in_oc_manual = False
+        self._oc_manual_timer = None
+        # self._in_oc_manual_orbit = False
+        self._oc_focus_id = -1
+        self._oc_manual_command_count = { \
+            'left': 0, \
+            'right': 0, \
+            'forward': 0, \
+            'backward': 0, \
+            'up': 0, \
+            'down': 0 \
+        }
+        self._oc_manual_command_threshold = 3
+        self._oc_manual_command_count_lock = threading.Lock()
 
         self._esc_pressed = 0
         self._keyboard_list = keyboard.Listener(on_press=self.key_pressed)
@@ -251,6 +265,7 @@ class TelloController():
             vpoint = data['LookPoint']
             print('Get focus 3d command for %d %s %s' % (focusId, str(vdir), str(vpoint)))
             if focusVoi is not None:
+                self._oc_focus_id = focusId
                 self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir, vpoint)
                 # self.__get_goal_for_controller()
 
@@ -262,6 +277,28 @@ class TelloController():
                 self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir)
                 # self.__get_goal_for_controller()
             
+        elif data['Type'] == 'ocmove':
+            direction = data['Direction'] 
+            if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
+                if self._oc_manual_timer is not None:
+                    self._oc_manual_timer.cancel()
+                self._oc_manual_timer = threading.Timer(0.5, self.__quit_oc_manual)
+                self._oc_manual_timer.start()
+            else:
+                self._oc_manual_command_count[direction] += 1
+                if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
+                    self._oc_manual_command_count_lock.acquire()
+                    for k in self._oc_manual_command_count.keys():
+                        if k != direction:
+                            self._oc_manual_command_count[k] = 0
+                    self._oc_manual_command_count_lock.release()
+                    if self._oc_focus_id != -1:
+                        focusVoi = self.voiMng.get_voi(self._oc_focus_id)
+                        if not self._in_oc_manual:
+                            self._in_oc_manual = True
+                            if direction == 'left' or direction == 'right':
+                            # First manual control command, generate 
+                                self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'left' else 'r') 
 
         elif data['Type'] == 'move':
             direction = data['Direction'] 
@@ -279,6 +316,14 @@ class TelloController():
         ## also update vicon fps
         self.vicon_freq.set(self.fps_count * 1 / 0.2)
         self.fps_count = 0
+
+    def __quit_oc_manual(self):
+        self._in_oc_manual = False
+        self._oc_manual_command_count_lock.acquire()
+        for k in self._oc_manual_command_count.keys():
+            self._oc_manual_command_count[k] = 0
+        self._oc_manual_command_count_lock.release()
+        self.actionPlan.abort_subgoals()
 
     #def __get_goal_for_controller(self):
     #    #with self.subgoalAccessLock:
@@ -366,7 +411,9 @@ class TelloController():
                 else:
                     # Took too long, mission aborted
                     if control_ret == 1:
-                        pass
+                        # force task reload
+                        self.controller.get_next_subgoal()
+
                         # self.__get_goal_for_controller()
                 ## Convert mm to cm, as the API uses cm
                 # signal_in_cm = [int(s / 10) for s in signal[:-1]] + [int(signal[-1])]

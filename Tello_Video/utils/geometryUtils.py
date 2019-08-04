@@ -82,6 +82,18 @@ class CameraParameters():
     
     def get_mat_top(self):
         return self._matTop
+
+    def get_int_mat_top(self):
+        return self._intMatTop
+
+    def get_int_mat_fpv(self):
+        return self._intMatFpv
+
+    def get_ext_mat_top(self):
+        return self._extMatTop
+
+    def get_ext_mat_top_inv(self):
+        return np.linalg.inv(np.vstack((self._extMatTop, np.array([[0, 0, 0, 1]]))))
     
     def get_mat_fpv(self):
         return self._matFpv
@@ -92,14 +104,6 @@ class CameraParameters():
     def get_f_fpv(self):
         return self._fFpv
 
-    def get_int_mat_top(self):
-        return self._intMatTop
-
-    def get_int_mat_fpv(self):
-        return self._intMatFpv
-
-    def get_ext_mat_top(self):
-        return self._extMatTop
         
     def get_ext_mat_fpv(self):
         return self._extMatFpv

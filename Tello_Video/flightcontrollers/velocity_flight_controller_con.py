@@ -9,15 +9,15 @@ from colorama import Fore
 
 class VelocityFlightControllerCon(object):
 
-    Horizontal_Output_Range = (-0.6, 0.6)
-    Vertical_Output_Range = (-0.6, 0.6)
+    Horizontal_Output_Range = (-0.4, 0.4)
+    Vertical_Output_Range = (-0.4, 0.4)
     Yaw_Output_Range = (-0.6, 0.6)
 
     def __init__(self):
-        self._x_controller = PidController(False, 0.8 / 1000, 0.16 / 1000, 0)
-        self._y_controller = PidController(False, 0.8 / 1000, 0.16 / 1000, 0)
-        self._z_controller = PidController(False, 0.8 / 1000, 0.16 / 1000, 0)
-        self._yaw_controller = PidController(True, 0.5, 0.06, 0.0)
+        self._x_controller = PidController(False, 0.6 / 1000, 0.06 / 1000, 0)
+        self._y_controller = PidController(False, 0.6 / 1000, 0.06 / 1000, 0)
+        self._z_controller = PidController(False, 0.6 / 1000, 0.06 / 1000, 0)
+        self._yaw_controller = PidController(True, 0.6, 0.00, 0.0)
 
         self._target_pose = None
         self._prev_target_pose = None
@@ -26,6 +26,7 @@ class VelocityFlightControllerCon(object):
         ## Should arrive at the target before this time 
         self._target_time = None
         self._target_time_duration = None
+        self._target_timeout_behavior = ''
         # self._target_ind = 0
 
         self._close_enough_xyz = 0.10 * 1000 
@@ -34,7 +35,7 @@ class VelocityFlightControllerCon(object):
         self._local_heading = np.array([0, 1, 0])
         ## Note there is no need to align with this drone model, as the x, y, z axes match exactly with roll, pitch, thrust
         #self._align_mat = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
-        self._stabilize_time = 5.0
+        self._stabilize_time = 8.0
 
         self._curr_vel = np.array([0, 0, 0])
         self._last_odom_pose = None
@@ -65,10 +66,11 @@ class VelocityFlightControllerCon(object):
     def on_goals(self, goals):
         self._goals = goals
         # The first subgoal is the previous target pose
-        prev_target_pose = self._goals[0]['params'][-6:]
-        prev_yaw = self.__dirvec_to_angle(prev_target_pose[3:])
-        self._prev_target_pose = DronePose(prev_target_pose[0], prev_target_pose[1], prev_target_pose[2], prev_yaw)
-        self.__get_subgoal(1)
+        if len(self._goals) > 0:
+            target_pose = self._goals[0]['params'][-6:]
+            yaw = self.__dirvec_to_angle(target_pose[3:])
+            self._target_pose = DronePose(target_pose[0], target_pose[1], target_pose[2], yaw)
+            self.__get_subgoal(1)
 
     def __get_subgoal(self, ind):
         if self._goals is not None and ind < len(self._goals):
@@ -77,14 +79,19 @@ class VelocityFlightControllerCon(object):
             n = self._goals[self._goals_ind]
             target_pos = n['params'][-6:]
             expected_time = n['exp_time']
+            timeout_b = n['timeout_b']
             self._prev_pose_time = time.time()
-            self.set_target(target_pos, expected_time)
+            self._prev_target_pose = self._target_pose
+            self.set_target(target_pos, expected_time, timeout_b)
             return True
         else:
             return False
 
+    def get_next_subgoal(self):
+        print('Get the next subgoal.')
+        self.__get_subgoal(self._goals_ind + 1)
 
-    def set_target(self, tarpos, tartime):
+    def set_target(self, tarpos, tartime, timeoutb):
         if tarpos is not None:
             # first turn direction vector into yaw angle
             taryaw = self.__dirvec_to_angle(tarpos[3:])
@@ -93,6 +100,7 @@ class VelocityFlightControllerCon(object):
             self._target_vel = diff / tartime
             self._target_time = tartime + time.time()
             self._target_time_duration = tartime
+            self._target_timeout_behavior = timeoutb
         else:
             self._target_pose = None
 
@@ -124,7 +132,10 @@ class VelocityFlightControllerCon(object):
             # retval = 1
             self.__get_subgoal(self._goals_ind + 1)
         elif now > self._target_time + self._stabilize_time:
-            retval = 1
+            if self._target_timeout_behavior == 'abort':
+                retval = 1
+            else:
+                self.__get_subgoal(self._goals_ind + 1)
         if retval == 0 or debug:
             if self._last_odom_pose is None:
                 self._last_odom_pose = curr_pose
@@ -136,9 +147,10 @@ class VelocityFlightControllerCon(object):
             self._y_controller.set_target(interim_target.y)
             self._z_controller.set_target(interim_target.z)
             self._yaw_controller.set_target(interim_target.yaw)
-            print('distance to interim target is %s' % str(self._last_odom_pose.vec_to(interim_target)))
+            # print('distance to interim target is %s' % str(self._last_odom_pose.vec_to(interim_target)))
             
-            dt = now - self._last_odom_time
+            # first data hack
+            dt = now - self._last_odom_time if self._last_odom_time != 0 else 0.2
             ubar_x = self._x_controller.calc(self._last_odom_pose.x, dt, 0.0)
             ubar_y = self._y_controller.calc(self._last_odom_pose.y, dt, 0.0)
             ubar_z = self._z_controller.calc(self._last_odom_pose.z, dt, 0.0)
@@ -152,7 +164,7 @@ class VelocityFlightControllerCon(object):
             # local_signal = signal_trans.dot(signal_xyz)
             local_signal = signal_trans.dot(motion_signal)
             retvec = local_signal.flatten().tolist() + [ubar_yaw]
-            # print('Raw control signal is %s' % str(retvec))
+            print('Raw control signal is %s' % str(retvec))
             ## Clamp the output 
             retvec = [VelocityFlightControllerCon.__clamp(retvec[0], VelocityFlightControllerCon.Horizontal_Output_Range[0], VelocityFlightControllerCon.Horizontal_Output_Range[1]), \
                     VelocityFlightControllerCon.__clamp(retvec[1], VelocityFlightControllerCon.Horizontal_Output_Range[0], VelocityFlightControllerCon.Horizontal_Output_Range[1]), \

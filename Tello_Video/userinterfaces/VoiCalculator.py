@@ -83,7 +83,10 @@ class VoiCalulator():
         threeintersections = map(lambda ray: self._get_ray_ground_intersection(ray[0], ray[1]), threerays)
         xlen = numpy.linalg.norm(threeintersections[1] -  threeintersections[2])
         ylen = numpy.linalg.norm(threeintersections[0] -  threeintersections[1])
-        return (self._get_ray_ground_intersection(o, d), threeintersections[0], xlen, ylen)
+        groundintersection = self._get_ray_ground_intersection(o, d)
+        camorigin = self._camParams.get_ext_mat_top_inv()[:3, 3].flatten()
+        lookp = (groundintersection + camorigin) / 2.0
+        return (lookp, threeintersections[0], xlen, ylen)
 
     def _get_pixel_ray(self, pix, P):
         M_inv = numpy.linalg.inv(P[:,:3])
