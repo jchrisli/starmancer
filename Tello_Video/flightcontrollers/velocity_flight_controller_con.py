@@ -88,7 +88,6 @@ class VelocityFlightControllerCon(object):
             return False
 
     def get_next_subgoal(self):
-        print('Get the next subgoal.')
         self.__get_subgoal(self._goals_ind + 1)
 
     def set_target(self, tarpos, tartime, timeoutb):
@@ -127,6 +126,9 @@ class VelocityFlightControllerCon(object):
         retvec = None
         now = time.time()
         # if now > self._target_time:
+        if len(self._goals) == 0:
+            # if the controller is in the stationary state
+            retval = 1
         if self._target_pose.close_enough(curr_pose, self._close_enough_xyz, self._close_enough_yaw):
             print('Close enough to the target.')
             # retval = 1

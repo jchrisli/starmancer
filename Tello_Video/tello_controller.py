@@ -48,7 +48,7 @@ class TelloController():
         # self.controller = DistanceFlightController(self.actionPlan)
         self.controller = VelocityFlightControllerCon()
         self.actionPlan.add_plan_subscriber(self.controller)
-
+        self._controller_active = True
         # Vicon connection
         self.vicon_connection = None
         # self.vicon_timestamp = 0
@@ -132,9 +132,13 @@ class TelloController():
         self._home_position = [0, -1500, 1200]
         self._home_dir = [0, 1, 0]
         self.voiMng.set_home_voi(self._home_position)
-        self._in_oc_manual = False
+        # self._in_oc_manual = False
+        self._OC_MANUAL_NONE = 0
+        self._OC_MANUAL_ORBITTING = 1
+        self._OC_MANUAL_PILOTTING = 2
+        self._oc_manual_state = self._OC_MANUAL_NONE
         self._oc_manual_timer = None
-        # self._in_oc_manual_orbit = False
+        self._in_oc_manual = False
         self._oc_focus_id = -1
         self._oc_manual_command_count = { \
             'left': 0, \
@@ -278,27 +282,45 @@ class TelloController():
                 # self.__get_goal_for_controller()
             
         elif data['Type'] == 'ocmove':
-            direction = data['Direction'] 
-            if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
-                if self._oc_manual_timer is not None:
-                    self._oc_manual_timer.cancel()
-                self._oc_manual_timer = threading.Timer(0.5, self.__quit_oc_manual)
-                self._oc_manual_timer.start()
-            else:
-                self._oc_manual_command_count[direction] += 1
+            if self._oc_focus_id != -1:
+                focusVoi = self.voiMng.get_voi(self._oc_focus_id)
+                direction = data['Direction'] 
                 if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
-                    self._oc_manual_command_count_lock.acquire()
-                    for k in self._oc_manual_command_count.keys():
-                        if k != direction:
-                            self._oc_manual_command_count[k] = 0
-                    self._oc_manual_command_count_lock.release()
-                    if self._oc_focus_id != -1:
+                    if direction == 'up' or direction == 'down':
+                        if abs((focusVoi['position3d'] - np.array(self.state[:3]))[2]) < focusVoi['sizehh']:
+                            self.tello.rc(0, 0, 0.2 * (1 if direction == 'up' else -1) , 0)
+                    if direction == 'forward':
+                        horizontal = np.append(focusVoi['position3d'][:2] - np.array(self.state[:3])[:2], [0], axis=0)
+                        horizontal_dist = np.linalg.norm(horizontal)
+                        print('horizontal dist, view dist, size3d: %s %s %s' % (horizontal_dist, focusVoi['view_dist'], focusVoi['size3d']))
+                        if horizontal_dist > min(focusVoi['view_dist'] / 1.5, focusVoi['size3d'] + 200):
+                            #TODO: calculate the velocity vector to voi center
+                            self.tello.rc(0, 0.2, 0, 0)
+                    if direction == 'backward':
+                        self.tello.rc(0, -0.2, 0, 0)
+
+                    if self._oc_manual_timer is not None:
+                        self._oc_manual_timer.cancel()
+                    self._oc_manual_timer = threading.Timer(0.5, self.__quit_oc_manual)
+                    self._oc_manual_timer.start()
+                else:
+                    self._oc_manual_command_count[direction] += 1
+                    if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
+                        self._oc_manual_command_count_lock.acquire()
+                        for k in self._oc_manual_command_count.keys():
+                            if k != direction:
+                                self._oc_manual_command_count[k] = 0
+                        self._oc_manual_command_count_lock.release()
                         focusVoi = self.voiMng.get_voi(self._oc_focus_id)
                         if not self._in_oc_manual:
                             self._in_oc_manual = True
                             if direction == 'left' or direction == 'right':
                             # First manual control command, generate 
+                                self._controller_active = True
                                 self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'left' else 'r') 
+                            if direction == 'forward' or direction == 'backward' or direction == 'up' or direction == 'down':
+                                # self.actionPlan.abort_subgoals()
+                                self._controller_active = False
 
         elif data['Type'] == 'move':
             direction = data['Direction'] 
@@ -324,22 +346,7 @@ class TelloController():
             self._oc_manual_command_count[k] = 0
         self._oc_manual_command_count_lock.release()
         self.actionPlan.abort_subgoals()
-
-    #def __get_goal_for_controller(self):
-    #    #with self.subgoalAccessLock:
-    #    n = iter(self.actionPlan).next()
-    #    # self.controller.set_current_goal(n)
-    #    if n is not None:
-    #        target_pos = n['params'][-6:]
-    #        target_vel = None
-    #        expected_time = n['exp_time']
-    #        self.controller.ntd = False
-    #        self.controller.set_target(target_pos, target_vel, expected_time)
-    #    else:
-    #        ## Reset controller
-    #        #self.controller.set_target(None, None, None)
-    #        self.controller.ntd = True
-
+        self._controller_active = True
 
     def handle_vicon_data(self, data):
         self.fps_count += 1
@@ -392,27 +399,24 @@ class TelloController():
                 R = vec_to_mat(observation[3:])
                 yaw_dir = R.dot(np.transpose(np.array([self.local_heading])))
                 self.state = list(observation[:3]) + yaw_dir.flatten().tolist()
-                #print('observation is %s' % str(observation))
-                #print('yawdir is %s' % str(yaw_dir))
-                #print('Drone state is %s' % str(self.state))
-                control_ret, signal = self.controller.odom_callback(observation, self.debugUI)
-                    
-                ''' TODO: do not send control signal if the drone is in emergency state (how to tell?) '''
-                if not self.debugUI:
-                    if control_ret == 1:
-                        # Took too long, mission aborted
-                        print('Timeout. Mission aborted.')
-                        self.tello.rc(0, 0, 0, 0)
-                        # self.tello.land()
+                if self._controller_active:
+                    control_ret, signal = self.controller.odom_callback(observation, self.debugUI)
+                        
+                    if not self.debugUI:
+                        if control_ret == 1:
+                            # Took too long, mission aborted
+                            print('Timeout or cancelled. Mission aborted.')
+                            self.tello.rc(0, 0, 0, 0)
+                            # self.tello.land()
+                        else:
+                            # Mission in progress
+                            # print('Control signal is %s' % str(signal))
+                            self.tello.rc(signal[0], signal[1], signal[2], -signal[3])
                     else:
-                        # Mission in progress
-                        # print('Control signal is %s' % str(signal))
-                        self.tello.rc(signal[0], signal[1], signal[2], -signal[3])
-                else:
-                    # Took too long, mission aborted
-                    if control_ret == 1:
-                        # force task reload
-                        self.controller.get_next_subgoal()
+                        # Took too long, mission aborted
+                        if control_ret == 1:
+                            # force task reload
+                            self.controller.get_next_subgoal()
 
                         # self.__get_goal_for_controller()
                 ## Convert mm to cm, as the API uses cm

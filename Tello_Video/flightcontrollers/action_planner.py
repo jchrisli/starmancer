@@ -27,7 +27,6 @@ class ActionPlanner():
         self._CAMERA_AXIS_TILT = 12 / 180.0 * math.pi
 
         self._VEL = 200
-        self._YAW_VEL = 60.0 / 180.0 * math.pi
 
         self._voi_manager = voim
         self._plan_subscriber = None
