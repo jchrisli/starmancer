@@ -293,6 +293,33 @@ class ActionPlanner():
             sub.append((wp_goal, lambda: True))
         self.__set_subgoals(sub)
         print(self._subgoals)
+
+    def generate_subgoals_manual_zoom(self, position, cdir, voi, io):
+        sub = []
+        position = np.array(position)
+        curr_dir = np.array(cdir)
+        first = self.__generate_along_line_subgoal(position, curr_dir, -1)
+        sub.append((first, lambda: True))
+        horizontal = np.append(voi['position3d'][:2] - position[:2], [0], axis=0)
+        horizontal_dir = horizontal / np.linalg.norm(horizontal)
+        horizontal_dist = np.linalg.norm(horizontal)
+        if io == 'i':
+            minimum_view_dist = max(voi['view_dist'] / 1.5, voi['size3d'] + 200)
+            # print('horizontal dist, view dist, size3d: %s %s %s' % (horizontal_dist, voi['view_dist'], voi['size3d']))
+            if horizontal_dist > minimum_view_dist:
+                zoomin_pos = voi['position3d'] -  minimum_view_dist * horizontal_dir
+                t = (horizontal_dist - minimum_view_dist) / self._VEL
+                zoomin_target = self.__generate_along_line_subgoal(zoomin_pos, horizontal_dir, t)
+                sub.append((zoomin_target, lambda: True))
+        elif io == 'o':
+            maximum_view_dist = 2 * voi['view_dist']
+            if maximum_view_dist > horizontal_dist:
+                zoomout_pos =  voi['position3d'] - maximum_view_dist * horizontal_dir
+                t = (maximum_view_dist - horizontal_dist) / self._VEL
+                zoomout_target = self.__generate_along_line_subgoal(zoomout_pos, horizontal_dir, t)
+                sub.append((zoomout_target, lambda: True))
+        self.__set_subgoals(sub)
+        print(self._subgoals)
     
     '''
         Simply go to a position and turn to a direction

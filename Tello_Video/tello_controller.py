@@ -262,6 +262,11 @@ class TelloController():
                 self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], lookAtVoi, lookDir)
                 # self.__get_goal_for_controller()
 
+        elif data['Type'] == 'focus':
+            focusId = data['Id']
+            print('Get focus update command for %s' % focusId)
+            self._oc_focus_id = focusId # -1 for no focus
+
         elif data['Type'] == 'focus3d':
             focusId = data['Id']
             focusVoi = self.voiMng.get_voi(focusId)
@@ -289,15 +294,15 @@ class TelloController():
                     if direction == 'up' or direction == 'down':
                         if abs((focusVoi['position3d'] - np.array(self.state[:3]))[2]) < focusVoi['sizehh']:
                             self.tello.rc(0, 0, 0.2 * (1 if direction == 'up' else -1) , 0)
-                    if direction == 'forward':
-                        horizontal = np.append(focusVoi['position3d'][:2] - np.array(self.state[:3])[:2], [0], axis=0)
-                        horizontal_dist = np.linalg.norm(horizontal)
-                        print('horizontal dist, view dist, size3d: %s %s %s' % (horizontal_dist, focusVoi['view_dist'], focusVoi['size3d']))
-                        if horizontal_dist > min(focusVoi['view_dist'] / 1.5, focusVoi['size3d'] + 200):
-                            #TODO: calculate the velocity vector to voi center
-                            self.tello.rc(0, 0.2, 0, 0)
-                    if direction == 'backward':
-                        self.tello.rc(0, -0.2, 0, 0)
+                    #if direction == 'forward':
+                    #    horizontal = np.append(focusVoi['position3d'][:2] - np.array(self.state[:3])[:2], [0], axis=0)
+                    #    horizontal_dist = np.linalg.norm(horizontal)
+                    #    print('horizontal dist, view dist, size3d: %s %s %s' % (horizontal_dist, focusVoi['view_dist'], focusVoi['size3d']))
+                    #    if horizontal_dist > min(focusVoi['view_dist'] / 1.5, focusVoi['size3d'] + 200):
+                    #        #TODO: calculate the velocity vector to voi center
+                    #        self.tello.rc(0, 0.2, 0, 0)
+                    #if direction == 'backward':
+                    #    self.tello.rc(0, -0.2, 0, 0)
 
                     if self._oc_manual_timer is not None:
                         self._oc_manual_timer.cancel()
@@ -314,11 +319,14 @@ class TelloController():
                         focusVoi = self.voiMng.get_voi(self._oc_focus_id)
                         if not self._in_oc_manual:
                             self._in_oc_manual = True
-                            if direction == 'left' or direction == 'right':
+                            if direction == 'left' or direction == 'right' or direction == 'forward' or direction == 'backward':
                             # First manual control command, generate 
                                 self._controller_active = True
-                                self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'left' else 'r') 
-                            if direction == 'forward' or direction == 'backward' or direction == 'up' or direction == 'down':
+                                if direction == 'left' or direction == 'right':
+                                    self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'left' else 'r') 
+                                else:
+                                    self.actionPlan.generate_subgoals_manual_zoom(self.state[0:3], self.state[3:], focusVoi, 'i' if direction == 'forward' else 'o')
+                            if direction == 'up' or direction == 'down':
                                 # self.actionPlan.abort_subgoals()
                                 self._controller_active = False
 
