@@ -49,6 +49,7 @@ class CameraParameters():
         self._matFpv = None
         self._vecUpWorld = None
         self._vecLookWorld= None
+        self._fpvTrans = None
         #self._vecLookLocal = (self._qRegCam.inverse).rotation_matrix.dot(np.array([0, 1.0, 0]))
         #self._vecUpLocal= (self._qRegCam.inverse).rotation_matrix.dot(np.array([0, 0, 1.0]))
         self._vecLookLocal = self._qRegCam.rotation_matrix.dot(np.array([0, 1.0, 0]))
@@ -57,10 +58,13 @@ class CameraParameters():
         self._fFpv = (self._intMatFpv[0, 0] + self._intMatFpv[1, 1]) / 2
         self._fTop = (self._intMatTop[0, 0] + self._intMatTop[1, 1]) / 2
         self._fpvRes = (960, 720)
+        self._fov = 57 / 180.0 * np.pi
 
     '''
-        World -> Vicon -> Camear
+        World -> Vicon -> Camera
         inv(R_wv) * inv(R_vc) - inv(R_wv) * T
+
+        TODO: see if there is threading issue here
     '''
     def update_fpv_ext(self, rot, trans):
         #self._extMatFpv = np.concatenate((rot, trans), axis=1)
@@ -69,7 +73,8 @@ class CameraParameters():
         self._vecLookWorld = rot.dot(self._vecLookLocal)
         self._vecUpWorld = rot.dot(self._vecUpLocal)
         rot = rot.dot(self._extViconToCamera)
-        trans = np.array(trans).reshape(3, 1)
+        self._fpvTrans = np.array(trans)
+        trans = self._fpvTrans.reshape(3, 1)
         try:
             self._extMatFpvR = np.linalg.inv(rot)
             self._extMatFpvT = - self._extMatFpvR.dot(trans)
@@ -94,6 +99,12 @@ class CameraParameters():
 
     def get_ext_mat_top_inv(self):
         return np.linalg.inv(np.vstack((self._extMatTop, np.array([[0, 0, 0, 1]]))))
+
+    def get_top_cam_position(self):
+        return self.get_ext_mat_top_inv()[:3, 3].flatten()
+
+    def get_fpv_cam_position(self):
+        return self._fpvTrans
     
     def get_mat_fpv(self):
         return self._matFpv
@@ -116,3 +127,7 @@ class CameraParameters():
 
     def get_up_vec(self):
         return self._vecUpWorld
+
+    ## TODO: calculate using internal matrix
+    def get_fov(self):
+        return self._fov

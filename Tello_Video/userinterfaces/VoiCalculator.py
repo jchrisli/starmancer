@@ -41,12 +41,17 @@ class VoiCalulator():
         '''
         self._camParams = camParams
         self._matTop = self._camParams.get_mat_top()
+        self._cam_pos = self._camParams.get_top_cam_position()
+        self._cam_proj_g = np.array([self._cam_pos[0], self._cam_pos[1], self._cam_pos[2]])
         self._roiFpv = None
         self._roiTop = None
 
         ## Constants
         self._DEFAULT_RADIUS = 110
         self._DEFAULT_HALF_HEIGHT = self._DEFAULT_RADIUS
+        # The target's height is between 0.5m and 1.75m
+        self._TARGET_HEIGHT_HIGH = 1750.0
+        self._TARGET_HEIGHT_LOW = 500.0
 
     '''
     def update_fpv_ext(self, rot, trans):
@@ -64,6 +69,33 @@ class VoiCalulator():
 
     def set_2d_roi_top(self, left, right, top, bottom, angle, t):
         self._roiTop = {'type': t, 'angle': angle, 'left': left, 'right': right, 'top': top, 'bottom': bottom}
+
+    def __get_visible_area(self, rayintersection):
+        """Get the center and radius of the circle, which the fpv camera that can see the entire possible target range lies on 
+        
+        Arguments:
+            rayintersection {numpy array} -- where the ray intersect with the ground
+        """
+        camz = self._cam_pos[2]
+        t_h = self._TARGET_HEIGHT_HIGH / camz
+        t_l = self._TARGET_HEIGHT_LOW / camz
+        proj_dir = self._cam_proj_g - rayintersection
+        proj_dir = proj_dir / np.linalg.norm(proj_dir)
+        low_proj_g = (1 - t_l) * rayintersection + t_l * self._cam_proj_g
+        high_proj_g = (1 - t_h) * rayintersection + t_h * self._cam_proj_g
+        center_proj_g = (low_proj_g + high_proj_g) / 2.0
+        ## get the vector that is perpendicular to the chord
+        chord_normal_y = -proj_dir[0] / proj_dir[1] 
+        chord_normal = np.array([1, chord_normal_y, 0])
+        chord_normal = chord_normal / np.linalg.norm(chord_normal)
+        chord_center_to_fpv = self._camParams.get_fpv_cam_position() - center_proj_g
+        chord_center_to_fpv = chord_center_to_fpv / np.linalg.norm(chord_center_to_fpv)
+        center_fpv_proj_chord = chord_normal * (chord_normal.dot(chord_center_to_fpv))
+        half_chord = np.linalg.norm(high_proj_g - low_proj_g) / 2.0
+        area_center =  center_proj_g + half_chord / math.tan(self._camParams.get_fov()) * center_fpv_proj_chord
+        area_r = half_chord / math.sin(self._camParams.get_fov())
+        return area_center, area_r
+
 
     def _get_ray_ground_intersection(self, rayori, raydir):
         o = rayori.flatten()
@@ -84,9 +116,23 @@ class VoiCalulator():
         xlen = numpy.linalg.norm(threeintersections[1] -  threeintersections[2])
         ylen = numpy.linalg.norm(threeintersections[0] -  threeintersections[1])
         groundintersection = self._get_ray_ground_intersection(o, d)
-        camorigin = self._camParams.get_ext_mat_top_inv()[:3, 3].flatten()
-        lookp = (groundintersection + camorigin) / 2.0
-        return (lookp, threeintersections[0], xlen, ylen)
+        # camorigin = self._camParams.get_ext_mat_top_inv()[:3, 3].flatten()
+        # lookp = (groundintersection + camorigin) / 2.0
+        fpv_area_c, fpv_area_r = self.__get_visible_area(groundintersection)
+        print('visible area center %s radius %s' % (fpv_area_c, fpv_area_r))
+        ## Check if the current camera position is in the area
+        fpv_pos = self._camParams.get_fpv_cam_position()
+        fpv_area_c[2] = fpv_pos[2]
+        radius_vec = fpv_pos - fpv_area_c
+        dist_to_c =  np.linalg.norm(radius_vec) 
+        print('Camera dist to c is %s' % dist_to_c)
+        if dist_to_c < fpv_area_r:
+            ## too close, back up
+            movep = fpv_area_c + fpv_area_r * radius_vec / dist_to_c
+        else:
+            movep = None
+        ## Always look at the center of the possible camera area 
+        return (movep, fpv_area_c, threeintersections[0], xlen, ylen)
 
     def _get_pixel_ray(self, pix, P):
         M_inv = numpy.linalg.inv(P[:,:3])

@@ -243,9 +243,14 @@ class TelloController():
 
         elif data['Type'] == 'roitopdown':
             topRoi = data['TopdownRoi']
-            look, tlIntersection, xl, yl = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
+            move, look, tlIntersection, xl, yl = self.voiCalc.get_roi_top_ground_intersection(topRoi['Left'], topRoi['Right'], topRoi['Top'], topRoi['Bottom'])
             print('Get roi topdown')
-            self.actionPlan.generate_subgoals_look(self.state[0:3], self.state[3:], look.tolist())
+            if move is None:
+                self.actionPlan.generate_subgoals_look(self.state[0:3], self.state[3:], look.tolist())
+            else:
+                look_after_move = look - move
+                look_after_move = look_after_move / np.linalg.norm(look_after_move)
+                self.actionPlan.generate_subgoals_position(self.state[0:3], self.state[3:], move.tolist(), look_after_move.tolist())
             # self.__get_goal_for_controller()
             # self.controller.look_at(look)
             ## Notify the frontend to render a spotlight visualization
