@@ -132,13 +132,9 @@ class TelloController():
         self._home_position = [0, -1500, 1200]
         self._home_dir = [0, 1, 0]
         self.voiMng.set_home_voi(self._home_position)
-        # self._in_oc_manual = False
-        self._OC_MANUAL_NONE = 0
-        self._OC_MANUAL_ORBITTING = 1
-        self._OC_MANUAL_PILOTTING = 2
-        self._oc_manual_state = self._OC_MANUAL_NONE
-        self._oc_manual_timer = None
-        self._in_oc_manual = False
+
+        self._manual_timer = None
+        self._in_manual = False
         self._oc_focus_id = -1
         self._oc_manual_command_count = { \
             'left': 0, \
@@ -291,10 +287,12 @@ class TelloController():
                 self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir)
                 # self.__get_goal_for_controller()
             
-        elif data['Type'] == 'ocmove':
+        elif data['Type'] == 'move':
             if self._oc_focus_id != -1:
+                ## only respond to commands from one joystick in the object centric mode
+                ## if both are present, use the data from right
                 focusVoi = self.voiMng.get_voi(self._oc_focus_id)
-                direction = data['Direction'] 
+                direction = data['Direction'][1] if data['Distance'][1] >= 0 else data['Direction'][0]
                 if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
                     if direction == 'up' or direction == 'down':
                         if abs((focusVoi['position3d'] - np.array(self.state[:3]))[2]) < focusVoi['sizehh']:
@@ -309,10 +307,10 @@ class TelloController():
                     #if direction == 'backward':
                     #    self.tello.rc(0, -0.2, 0, 0)
 
-                    if self._oc_manual_timer is not None:
-                        self._oc_manual_timer.cancel()
-                    self._oc_manual_timer = threading.Timer(0.5, self.__quit_oc_manual)
-                    self._oc_manual_timer.start()
+                    if self._manual_timer is not None:
+                        self._manual_timer.cancel()
+                    self._manual_timer = threading.Timer(0.5, self.__quit_manual)
+                    self._manual_timer.start()
                 else:
                     self._oc_manual_command_count[direction] += 1
                     if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
@@ -322,8 +320,8 @@ class TelloController():
                                 self._oc_manual_command_count[k] = 0
                         self._oc_manual_command_count_lock.release()
                         focusVoi = self.voiMng.get_voi(self._oc_focus_id)
-                        if not self._in_oc_manual:
-                            self._in_oc_manual = True
+                        if not self._in_manual:
+                            self._in_manual = True
                             if direction == 'left' or direction == 'right' or direction == 'forward' or direction == 'backward':
                             # First manual control command, generate 
                                 self._controller_active = True
@@ -334,13 +332,35 @@ class TelloController():
                             if direction == 'up' or direction == 'down':
                                 # self.actionPlan.abort_subgoals()
                                 self._controller_active = False
-
-        elif data['Type'] == 'move':
-            direction = data['Direction'] 
-            if direction == 'forward':
-                self.tello.move_forward(self._MANUAL_DIST)
-            else: 
-                self.tello.move_backward(self._MANUAL_DIST)
+            # Pure manual control                    
+            else:
+                direction = data['Direction'] 
+                angle = data['Angle']
+                dist = data['Distance']
+                roll = pitch = yaw =  thrust = 0
+                if dist[0] > 0:
+                    if direction[0] == 'up' or direction[0] == 'down':
+                        thrust = dist[0] * (1 if direction[0] == 'up' else -1)
+                    else:
+                        yaw = dist[0] * (1 if direction[0] == 'cw' else -1)
+                if dist[1] > 0:
+                    ## Right/left
+                    ## Turn joystick angle into Cartesian angle
+                    ## (360)|(0)            |
+                    ##      |       to _____|_____(0)
+                    ## _____|______               (360)
+                    angle_r = -angle[1] + 2 * np.pi + np.pi / 2.0 if -angle[1] + np.pi / 2.0 < 2 * np.pi else -angle[1] + np.pi / 2.0
+                    roll = dist[1] * np.cos(angle_r)
+                    pitch = dist[1] * np.sin(angle_r)
+                self.tello.rc(roll, pitch, thrust, yaw)
+                if not self._in_manual:
+                    self._in_manual = True
+                if self._controller_active:
+                    self._controller_active = False
+                if self._manual_timer is not None:
+                    self._manual_timer.cancel()
+                self._manual_timer = threading.Timer(0.5, self.__quit_manual)
+                self._manual_timer.start()
            
     def __query_battery(self):
         print('Current battery level is %s' % self.tello.get_battery())
@@ -352,8 +372,8 @@ class TelloController():
         self.vicon_freq.set(self.fps_count * 1 / 0.2)
         self.fps_count = 0
 
-    def __quit_oc_manual(self):
-        self._in_oc_manual = False
+    def __quit_manual(self):
+        self._in_manual = False
         self._oc_manual_command_count_lock.acquire()
         for k in self._oc_manual_command_count.keys():
             self._oc_manual_command_count[k] = 0
