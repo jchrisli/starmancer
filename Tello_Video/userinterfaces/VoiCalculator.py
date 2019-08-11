@@ -53,17 +53,6 @@ class VoiCalulator():
         self._TARGET_HEIGHT_HIGH = 1750.0
         self._TARGET_HEIGHT_LOW = 500.0
 
-    '''
-    def update_fpv_ext(self, rot, trans):
-        #self._extMatFpv = np.concatenate((rot, trans), axis=1)
-        rot = np.array(rot).reshape(3, 3)
-        rot = self._extViconToCamera.dot(rot)
-        trans = np.array(trans).reshape(3, 1)
-        self._extMatFpvR = numpy.linalg.inv(rot)
-        self._extMatFpvT = - self._extMatFpvR.dot(trans)
-        ## Update fpv camera calibration matrix
-        self._matFpv = self._intMatFpv.dot(np.hstack((self._extMatFpvR, self._extMatFpvT)))
-    '''
     def set_2d_roi_fpv(self, left, right, top, bottom, t):
         self._roiFpv = {'type': t, 'left': left, 'right': right, 'top': top, 'bottom': bottom}
 

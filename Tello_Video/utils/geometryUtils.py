@@ -21,6 +21,33 @@ def vec_to_mat(nine_list):
         nine_list[3], nine_list[4], nine_list[5]], [
             nine_list[6], nine_list[7], nine_list[8]]])
 
+def point_to_line_dist(x1, x2, c):
+    ## The line is vec_x1 + t * (vec_x2 - vec_x1)
+    ## The point is vec_c
+    ## From https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
+    n = x2 - x1
+    n = n / np.linalg.norm(n)
+    half_bottom_side = ((x1 - c).dot(n)) * n 
+    dist = (x1 - c) - half_bottom_side
+    return np.linalg.norm(dist)
+
+def tangent_line_circle(p, c, r):
+    pc = c - p
+    pc_dist = np.linalg.norm(pc)
+    pc_dir = pc / pc_dist
+    pc_dir_col = np.reshape(pc_dir, (2, 1))
+    if pc_dist <= r:
+        return None
+    else:
+        theta = np.arcsin(r / pc_dist)
+        s_theta = np.sin(theta)
+        c_theta = np.cos(theta)
+        rot_m1 = np.array([[c_theta, s_theta], [s_theta, c_theta]])
+        rot_m2 = np.array([[c_theta, -s_theta], [-s_theta, c_theta]])
+        tvec1 = rot_m1.dot(pc_dir_col).flatten()
+        tvec2 = rot_m2.dot(pc_dir_col).flatten()
+        return (tvec1, tvec2)
+
 class CameraParameters():
     def __init__(self):
         self._intMatFpv = np.array([[885.5839394885504, 0.0, 488.2530454326725], \

@@ -297,16 +297,6 @@ class TelloController():
                     if direction == 'up' or direction == 'down':
                         if abs((focusVoi['position3d'] - np.array(self.state[:3]))[2]) < focusVoi['sizehh']:
                             self.tello.rc(0, 0, 0.2 * (1 if direction == 'up' else -1) , 0)
-                    #if direction == 'forward':
-                    #    horizontal = np.append(focusVoi['position3d'][:2] - np.array(self.state[:3])[:2], [0], axis=0)
-                    #    horizontal_dist = np.linalg.norm(horizontal)
-                    #    print('horizontal dist, view dist, size3d: %s %s %s' % (horizontal_dist, focusVoi['view_dist'], focusVoi['size3d']))
-                    #    if horizontal_dist > min(focusVoi['view_dist'] / 1.5, focusVoi['size3d'] + 200):
-                    #        #TODO: calculate the velocity vector to voi center
-                    #        self.tello.rc(0, 0.2, 0, 0)
-                    #if direction == 'backward':
-                    #    self.tello.rc(0, -0.2, 0, 0)
-
                     if self._manual_timer is not None:
                         self._manual_timer.cancel()
                     self._manual_timer = threading.Timer(0.5, self.__quit_manual)

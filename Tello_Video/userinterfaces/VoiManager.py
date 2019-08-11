@@ -37,6 +37,7 @@ class VoiManager():
         # pos3dInTopdown = np.array([0, 0, 1000]).reshape(3, 1)
         #print('3D coords {0}'.format(str(pos3dInTopdown)))
         dist2Topdown = pos3dInTopdown[2, 0]
+        # TODO: remove the topdown view related code
         sizeTopdown = self._fTop * size3d / dist2Topdown
         posInTopdown = self._intMatTop.dot(pos3dInTopdown)
         posInTopdown = (posInTopdown / posInTopdown[2, 0]).flatten()
