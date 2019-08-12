@@ -23,6 +23,7 @@ class VoiManager():
 
         ## Add a virtual voi for the home position
         self._homeVoi = None
+        self._CAM_DIAG = 134.76
 
     def set_home_voi(self, position):
         self._homeVoi = {'position3d': np.array(position), 'view_dist': 1}
@@ -80,28 +81,28 @@ class VoiManager():
         else:
             return False
 
-    def get_voi_fpv_projection(self, voi):
-        #voi = self.get_voi(voiId)
+    #def get_voi_fpv_projection(self, voi):
+    #    #voi = self.get_voi(voiId)
             ## project this voi onto the fpv camera view
-        em = self._camParams.get_ext_mat_fpv()
-        im = self._camParams.get_int_mat_fpv()
-        pos3d = voi['position3d']
-        #pos3d = np.array([0, 0, 1000])
-        size3d = voi['size3d']
-        sizehh = voi['sizehh']
-        voiId = voi['id']
-        pos3dInFpv = em.dot(np.append(pos3d, [1.0]).reshape(4, 1))
-        dist2Fpv = pos3dInFpv[2, 0]
-        if dist2Fpv <= 0:
-            return None
-        widthInFpv = 2 * self._fFpv * size3d / dist2Fpv
-        heightInFpv = 2 * self._fFpv * sizehh / dist2Fpv
-        posInFpv = im.dot(pos3dInFpv)
-        posInFpv = (posInFpv / posInFpv[2, 0]).flatten()
-        if self.__in_fpv_frame(posInFpv[0], posInFpv[1]):
-            return (voiId, posInFpv.tolist(), widthInFpv, heightInFpv)
-        else:
-            return None
+    #    em = self._camParams.get_ext_mat_fpv()
+    #    im = self._camParams.get_int_mat_fpv()
+    #    pos3d = voi['position3d']
+    #    #pos3d = np.array([0, 0, 1000])
+    #    size3d = voi['size3d']
+    #    sizehh = voi['sizehh']
+    #    voiId = voi['id']
+    #    pos3dInFpv = em.dot(np.append(pos3d, [1.0]).reshape(4, 1))
+    #    dist2Fpv = pos3dInFpv[2, 0]
+    #    if dist2Fpv <= 0:
+    #        return None
+    #    widthInFpv = 2 * self._fFpv * size3d / dist2Fpv
+    #    heightInFpv = 2 * self._fFpv * sizehh / dist2Fpv
+    #    posInFpv = im.dot(pos3dInFpv)
+    #    posInFpv = (posInFpv / posInFpv[2, 0]).flatten()
+    #    if self.__in_fpv_frame(posInFpv[0], posInFpv[1]):
+    #        return (voiId, posInFpv.tolist(), widthInFpv, heightInFpv)
+    #    else:
+    #        return None
 
     def get_voi(self, id):
         voi = filter(lambda v: v["id"] == id, self.vois)
@@ -109,16 +110,24 @@ class VoiManager():
             return voi[0]
         else:
             return None
+
     '''
         Return a list of 3-tuples that contain projected position and width and height of vois
         The elements of the list can be None
     '''
-    def get_all_voi_projected(self):
-        projected = map(lambda v: self.get_voi_fpv_projection(v), self.vois)
-        projected = filter(lambda p: p is not None, projected)
-        return projected
+    #def get_all_voi_projected(self):
+    #    projected = map(lambda v: self.get_voi_fpv_projection(v), self.vois)
+    #    projected = filter(lambda p: p is not None, projected)
+    #    return projected
 
     def test_path_against_all_voi(self, p1, p2):
         test_params_bound = functools.partial(self.__test_line_seg_against_voi, p1 = p1, p2 = p2)
         return any(map(test_params_bound, self.vois))
+
+    """Get the dimension information of all vois, projected onto the x-y plane
+    """
+
+    def get2dvois(self):
+        vois2d = [(v['position3d'][0], v['position3d'][1], v['size3d'] + self._CAM_DIAG / 2.0) for v in self.vois]
+        return vois2d
 

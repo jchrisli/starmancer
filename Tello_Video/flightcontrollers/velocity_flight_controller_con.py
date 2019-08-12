@@ -13,7 +13,7 @@ class VelocityFlightControllerCon(object):
     Vertical_Output_Range = (-0.4, 0.4)
     Yaw_Output_Range = (-0.6, 0.6)
 
-    def __init__(self):
+    def __init__(self, local_planner):
         self._x_controller = PidController(False, 0.6 / 1000, 0.06 / 1000, 0)
         self._y_controller = PidController(False, 0.6 / 1000, 0.06 / 1000, 0)
         self._z_controller = PidController(False, 0.6 / 1000, 0.06 / 1000, 0)
@@ -45,8 +45,8 @@ class VelocityFlightControllerCon(object):
         self._goals = None
         self._goals_ind = 0
 
-        ### public
-        # self.ntd = True
+        # local path planner
+        self._local_planner = local_planner
 
     def __dirvec_to_angle(self, dirvec):
         vecsin = dirvec[1] / math.sqrt(dirvec[0] ** 2 + dirvec[1] ** 2)
@@ -159,14 +159,16 @@ class VelocityFlightControllerCon(object):
             ubar_yaw = self._yaw_controller.calc(self._last_odom_pose.yaw, dt, 0.0)
             print('First order error now is %s' % (str([self._target_pose.x - curr_pose.x, self._target_pose.y - curr_pose.y, self._target_pose.z - curr_pose.z, self._target_pose.yaw - curr_pose.yaw])))
 
-            motion_signal = np.array([[ubar_x], [ubar_y], [ubar_z]])
+            motion_signal = np.array([ubar_x, ubar_y, ubar_z])
+            motion_signal = self._local_planner.alter_velocity(self._last_odom_pose.to_np_array(), interim_target.to_np_array(), motion_signal.flatten())
+            motion_signal = np.reshape(motion_signal, (3, 1))
             # Rotate x, y velocity back to the drone's frame
             #signal_trans = inv(R.dot(self._align_mat))
             signal_trans = inv(R)
             # local_signal = signal_trans.dot(signal_xyz)
             local_signal = signal_trans.dot(motion_signal)
             retvec = local_signal.flatten().tolist() + [ubar_yaw]
-            print('Raw control signal is %s' % str(retvec))
+            # print('Raw control signal is %s' % str(retvec))
             ## Clamp the output 
             retvec = [VelocityFlightControllerCon.__clamp(retvec[0], VelocityFlightControllerCon.Horizontal_Output_Range[0], VelocityFlightControllerCon.Horizontal_Output_Range[1]), \
                     VelocityFlightControllerCon.__clamp(retvec[1], VelocityFlightControllerCon.Horizontal_Output_Range[0], VelocityFlightControllerCon.Horizontal_Output_Range[1]), \

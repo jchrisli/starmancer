@@ -50,7 +50,7 @@ class DronePose():
         return DronePose(nx, ny, nz, yaw)
 
     def to_np_array(self):
-        return np.array(self)
+        return np.array([self.x, self.y, self.z, self.yaw])
 
     def move_timed(self, target, total_time, elapsed_time): 
         diff = self.vec_to(target)

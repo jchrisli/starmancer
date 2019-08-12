@@ -27,6 +27,7 @@ from userinterfaces.VoiManager import VoiManager
 import copy
 from utils.geometryUtils import CameraParameters
 from flightcontrollers.action_planner import ActionPlanner
+from flightcontrollers.local_path_planner import LocalPathPlanner
 import numpy as np
 # from pyquaternion import Quaternion
 from utils.geometryUtils import vec_to_mat
@@ -46,7 +47,8 @@ class TelloController():
         self.state = []
         # Flight controller and its parameters
         # self.controller = DistanceFlightController(self.actionPlan)
-        self.controller = VelocityFlightControllerCon()
+        self.local_path_planner = LocalPathPlanner(self.voiMng)
+        self.controller = VelocityFlightControllerCon(self.local_path_planner)
         self.actionPlan.add_plan_subscriber(self.controller)
         self._controller_active = True
         # Vicon connection
@@ -142,7 +144,9 @@ class TelloController():
             'forward': 0, \
             'backward': 0, \
             'up': 0, \
-            'down': 0 \
+            'down': 0, \
+            'cw': 0, \
+            'ccw': 0 \
         }
         self._oc_manual_command_threshold = 3
         self._oc_manual_command_count_lock = threading.Lock()
@@ -294,9 +298,10 @@ class TelloController():
                 focusVoi = self.voiMng.get_voi(self._oc_focus_id)
                 direction = data['Direction'][1] if data['Distance'][1] >= 0 else data['Direction'][0]
                 if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
-                    if direction == 'up' or direction == 'down':
-                        if abs((focusVoi['position3d'] - np.array(self.state[:3]))[2]) < focusVoi['sizehh']:
-                            self.tello.rc(0, 0, 0.2 * (1 if direction == 'up' else -1) , 0)
+                    if direction == 'up' and np.array(self.state[:3])[2] - focusVoi['position3d'][2] < focusVoi['sizehh']:
+                        self.tello.rc(0, 0, 0.2, 0)
+                    elif direction == 'down' and focusVoi['position3d'][2] - np.array(self.state[:3])[2] < focusVoi['sizehh']:
+                        self.tello.rc(0, 0, -0.2, 0)
                     if self._manual_timer is not None:
                         self._manual_timer.cancel()
                     self._manual_timer = threading.Timer(0.5, self.__quit_manual)

@@ -48,6 +48,25 @@ def tangent_line_circle(p, c, r):
         tvec2 = rot_m2.dot(pc_dir_col).flatten()
         return (tvec1, tvec2)
 
+def line_seg_intersect_circle(c, r, p1, p2):
+    x = c
+    path_seg = p2 - p1
+    path_seg_len = np.linalg.norm(path_seg)
+    path_dir = path_seg / path_seg_len
+    t = path_dir.dot(x - p1)
+    closest = p1 + t * path_dir
+    dist = np.linalg.norm(closest - x)
+    if r >= dist:
+        ## Check if any of the two intersection is on the path segment
+        half = np.sqrt(r ** 2 - dist ** 2)
+        #intersect_1 = closest + path_dir * half
+        #intersect_2 = closest - path_dir * half
+        intersect_1 = t + half
+        intersect_2 = t - half
+        return any([v < path_seg_len and v > 0 for v in [intersect_1, intersect_2]])
+    else:
+        return False
+
 class CameraParameters():
     def __init__(self):
         self._intMatFpv = np.array([[885.5839394885504, 0.0, 488.2530454326725], \
