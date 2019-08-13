@@ -131,9 +131,9 @@ class TelloController():
         self._MANUAL_DIST = 0.2 # Other APIs use meter as the unit
         self._MANUAL_DEG = 10
         self._home_pressed = 0
-        self._home_position = [0, -1500, 1200]
-        self._home_dir = [0, 1, 0]
-        self.voiMng.set_home_voi(self._home_position)
+        self._home_position = [-2000, -1250, 1200]
+        self._home_dir = [np.sqrt(0.5), np.sqrt(0.5), 0]
+        # self.voiMng.set_home_voi(self._home_position)
 
         self._manual_timer = None
         self._in_manual = False
@@ -290,6 +290,10 @@ class TelloController():
                 vdir = focusVoi['position3d'] - np.array(self.state[0:3])
                 self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir)
                 # self.__get_goal_for_controller()
+
+        elif data['Type'] == 'home':
+            self.actionPlan.abort_subgoals()
+            self.actionPlan.generate_subgoals_position(self.state[0:3], self.state[3:], self._home_position, self._home_dir)
             
         elif data['Type'] == 'move':
             if self._oc_focus_id != -1:
@@ -354,7 +358,7 @@ class TelloController():
                     self._controller_active = False
                 if self._manual_timer is not None:
                     self._manual_timer.cancel()
-                self._manual_timer = threading.Timer(0.5, self.__quit_manual)
+                self._manual_timer = threading.Timer(0.07, self.__quit_manual)
                 self._manual_timer.start()
            
     def __query_battery(self):
