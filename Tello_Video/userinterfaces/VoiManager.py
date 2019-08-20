@@ -131,3 +131,9 @@ class VoiManager():
         vois2d = [(v['position3d'][0], v['position3d'][1], v['size3d'] + self._CAM_DIAG / 2.0) for v in self.vois]
         return vois2d
 
+    def get2d_bounding_boxex(self):
+        bb = [(42.73686555, 715.24277647, 150 + self._CAM_DIAG / 2.0),\
+            (-1647.58799028, 1052.11543762, 150 + self._CAM_DIAG / 2.0),\
+            (-62.80333094, -1281.93800245, 150 + self._CAM_DIAG / 2.0)]
+        return bb
+

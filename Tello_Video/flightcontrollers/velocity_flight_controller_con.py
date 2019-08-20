@@ -144,7 +144,7 @@ class VelocityFlightControllerCon(object):
             elapsed_time = now - self._prev_pose_time
             # interim_target = self._prev_target_pose.move(self._target_vel, elapsed_time)
             interim_target = self._prev_target_pose.move_timed(self._target_pose, self._target_time_duration, elapsed_time)
-            print('Elapsed time %s total time %s' % (str(elapsed_time), str(self._target_time_duration)))
+            #print('Elapsed time %s total time %s' % (str(elapsed_time), str(self._target_time_duration)))
             self._x_controller.set_target(interim_target.x)
             self._y_controller.set_target(interim_target.y)
             self._z_controller.set_target(interim_target.z)
@@ -152,15 +152,16 @@ class VelocityFlightControllerCon(object):
             # print('distance to interim target is %s' % str(self._last_odom_pose.vec_to(interim_target)))
             
             # first data hack
-            dt = now - self._last_odom_time if self._last_odom_time != 0 else 0.2
+            dt = now - self._last_odom_time if self._last_odom_time != 0 else 0.1
             ubar_x = self._x_controller.calc(self._last_odom_pose.x, dt, 0.0)
             ubar_y = self._y_controller.calc(self._last_odom_pose.y, dt, 0.0)
             ubar_z = self._z_controller.calc(self._last_odom_pose.z, dt, 0.0)
             ubar_yaw = self._yaw_controller.calc(self._last_odom_pose.yaw, dt, 0.0)
-            print('First order error now is %s' % (str([self._target_pose.x - curr_pose.x, self._target_pose.y - curr_pose.y, self._target_pose.z - curr_pose.z, self._target_pose.yaw - curr_pose.yaw])))
+            #print('First order error now is %s' % (str([self._target_pose.x - curr_pose.x, self._target_pose.y - curr_pose.y, self._target_pose.z - curr_pose.z, self._target_pose.yaw - curr_pose.yaw])))
 
             motion_signal = np.array([ubar_x, ubar_y, ubar_z])
-            motion_signal = self._local_planner.alter_velocity(self._last_odom_pose.to_np_array(), interim_target.to_np_array(), motion_signal.flatten())
+            ## Do not use local path planning for now
+            #motion_signal = self._local_planner.alter_velocity(self._last_odom_pose.to_np_array(), interim_target.to_np_array(), motion_signal.flatten())
             motion_signal = np.reshape(motion_signal, (3, 1))
             # Rotate x, y velocity back to the drone's frame
             #signal_trans = inv(R.dot(self._align_mat))

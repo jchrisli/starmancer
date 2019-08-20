@@ -64,11 +64,15 @@ class TelloController():
 
         self.command_transport_target_port = 8091
         self.command_transport_recv_port = 8092
+        # forward vicon pose data to this port
+        self.study_port = 8098 
 
         # thread for receving commands from the WPF frontend
         self.command_transport = CommandTransportUdp(self.command_transport_target_port, \
                                                     self.command_transport_recv_port, \
                                                     self._recv_command_handler) 
+
+        self.vicon_forward = CommandTransportUdp(self.study_port, 10000, None)
 
         self.control_sig = None
         self.state_x = []
@@ -125,7 +129,8 @@ class TelloController():
         self._recur_query_thread = RecurringEvent(self._recur_query_event, self.__query_battery, 3)
         self._controller_ready = True
         self._controller_update_event = threading.Event()
-        self._controller_update_thread = RecurringEvent(self._controller_update_event, self.__reset_controller_update_flag, 0.2)
+        self._controller_reset_interval = 0.1
+        self._controller_update_thread = RecurringEvent(self._controller_update_event, self.__reset_controller_update_flag, self._controller_reset_interval)
         
         ## Manual control params
         self._MANUAL_DIST = 0.2 # Other APIs use meter as the unit
@@ -151,8 +156,8 @@ class TelloController():
         self._oc_manual_command_threshold = 3
         self._oc_manual_command_count_lock = threading.Lock()
 
-        self._esc_pressed = 0
-        self._keyboard_list = keyboard.Listener(on_press=self.key_pressed)
+        #self._esc_pressed = 0
+        #self._keyboard_list = keyboard.Listener(on_press=self.key_pressed)
 
         ## Record roi data onto a file
         timed_name = time.strftime('%d-%b-%H-%M-%S', time.localtime()) + '.csv'
@@ -178,42 +183,42 @@ class TelloController():
         W: up S: down A: rotate ccw D: rotate cw 
         Arrow up: forward Arrow down: backward Arrow left: left Arrow right: right
     '''
-    def key_pressed(self, key):
-        ## 
-        print('%s pressed' % str(key))
-        if key.char == 'w':
-            self.tello.move_up(self._MANUAL_DIST)
-        elif key.char == 's':
-            self.tello.move_down(self._MANUAL_DIST)
-        elif key.char == 'a':
-            self.tello.rotate_ccw(self._MANUAL_DEG)
-        elif key.char == 'd':
-            self.tello.rotate_cw(self._MANUAL_DEG)
-        elif key.char == 'i':
-            self.tello.move_forward(self._MANUAL_DIST)
-        elif key.char == 'k':
-            self.tello.move_backward(self._MANUAL_DIST)
-        elif key.char == 'j':
-            self.tello.move_left(self._MANUAL_DIST)
-        elif key.char == 'l':
-            self.tello.move_right(self._MANUAL_DIST)
-        ## Homing after pressing 'h' two times
-        elif key.char == 'h':
-            self._home_pressed += 1
-            if self._home_pressed > 1:
-                self._home_pressed = 0
-                home_voi = self.voiMng.get_home_voi()
-                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], home_voi, self._home_dir)
-                rmall_cmd = {'type': 'removeall'}
-                self.command_transport.send(json.dumps(rmall_cmd))
-                ## Clear all existing vois
-                self.voiMng.clear_all_vois()
-        elif key == keyboard.Key.esc:
-            self._esc_pressed += 1
-            if self._esc_pressed > 1:
-                self._esc_pressed = 0
-                #if
-                self.tello.land()
+    #def key_pressed(self, key):
+        ### 
+        #print('%s pressed' % str(key))
+        ##if key.char == 'w':
+            #self.tello.move_up(self._MANUAL_DIST)
+        #elif key.char == 's':
+            #self.tello.move_down(self._MANUAL_DIST)
+        #elif key.char == 'a':
+            #self.tello.rotate_ccw(self._MANUAL_DEG)
+        #elif key.char == 'd':
+            #self.tello.rotate_cw(self._MANUAL_DEG)
+        #elif key.char == 'i':
+            #self.tello.move_forward(self._MANUAL_DIST)
+        #elif key.char == 'k':
+            #self.tello.move_backward(self._MANUAL_DIST)
+        #elif key.char == 'j':
+            #self.tello.move_left(self._MANUAL_DIST)
+        #elif key.char == 'l':
+            #self.tello.move_right(self._MANUAL_DIST)
+        ### Homing after pressing 'h' two times
+        #elif key.char == 'h':
+            #self._home_pressed += 1
+            #if self._home_pressed > 1:
+                #self._home_pressed = 0
+                #home_voi = self.voiMng.get_home_voi()
+                #self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], home_voi, self._home_dir)
+                #rmall_cmd = {'type': 'removeall'}
+                #self.command_transport.send(json.dumps(rmall_cmd))
+                ### Clear all existing vois
+                #self.voiMng.clear_all_vois()
+        #elif key == keyboard.Key.esc:
+            #self._esc_pressed += 1
+            #if self._esc_pressed > 1:
+                #self._esc_pressed = 0
+                ##if
+                #self.tello.land()
         
     def _recv_command_handler(self, data):
         '''
@@ -293,6 +298,8 @@ class TelloController():
 
         elif data['Type'] == 'home':
             self.actionPlan.abort_subgoals()
+            self.voiMng.clear_all_vois()
+            ## Remove all existing rois
             self.actionPlan.generate_subgoals_position(self.state[0:3], self.state[3:], self._home_position, self._home_dir)
             
         elif data['Type'] == 'move':
@@ -302,13 +309,19 @@ class TelloController():
                 focusVoi = self.voiMng.get_voi(self._oc_focus_id)
                 direction = data['Direction'][1] if data['Distance'][1] >= 0 else data['Direction'][0]
                 if self._oc_manual_command_count[direction] > self._oc_manual_command_threshold:
-                    if direction == 'up' and np.array(self.state[:3])[2] - focusVoi['position3d'][2] < focusVoi['sizehh']:
+                    #if direction == 'up' and np.array(self.state[:3])[2] - focusVoi['position3d'][2] < focusVoi['sizehh']:
+                    if direction == 'up':
                         self.tello.rc(0, 0, 0.2, 0)
-                    elif direction == 'down' and focusVoi['position3d'][2] - np.array(self.state[:3])[2] < focusVoi['sizehh']:
+                    #elif direction == 'down' and focusVoi['position3d'][2] - np.array(self.state[:3])[2] < focusVoi['sizehh']:
+                    elif direction == 'down':
                         self.tello.rc(0, 0, -0.2, 0)
+                    elif direction == 'left':
+                        self.tello.rc(-0.2, 0, 0, 0)
+                    elif direction == 'right':
+                        self.tello.rc(0.2, 0, 0, 0)
                     if self._manual_timer is not None:
                         self._manual_timer.cancel()
-                    self._manual_timer = threading.Timer(0.5, self.__quit_manual)
+                    self._manual_timer = threading.Timer(0.25, self.__quit_manual)
                     self._manual_timer.start()
                 else:
                     self._oc_manual_command_count[direction] += 1
@@ -321,27 +334,32 @@ class TelloController():
                         focusVoi = self.voiMng.get_voi(self._oc_focus_id)
                         if not self._in_manual:
                             self._in_manual = True
-                            if direction == 'left' or direction == 'right' or direction == 'forward' or direction == 'backward':
+                            #if direction == 'left' or direction == 'right' or direction == 'forward' or direction == 'backward':
+                            if direction == 'ccw' or direction == 'cw' or direction == 'forward' or direction == 'backward':
                             # First manual control command, generate 
                                 self._controller_active = True
-                                if direction == 'left' or direction == 'right':
-                                    self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'left' else 'r') 
+                                #if direction == 'left' or direction == 'right':
+                                if direction == 'ccw' or direction == 'cw':
+                                    #self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'left' else 'r') 
+                                    self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'ccw' else 'r') 
                                 else:
                                     self.actionPlan.generate_subgoals_manual_zoom(self.state[0:3], self.state[3:], focusVoi, 'i' if direction == 'forward' else 'o')
-                            if direction == 'up' or direction == 'down':
+                            if direction == 'up' or direction == 'down' and direction == 'left' or direction == 'right':
                                 # self.actionPlan.abort_subgoals()
                                 self._controller_active = False
             # Pure manual control                    
             else:
+                if self._controller_active:
+                    self._controller_active = False
                 direction = data['Direction'] 
                 angle = data['Angle']
                 dist = data['Distance']
                 roll = pitch = yaw =  thrust = 0
                 if dist[0] > 0:
                     if direction[0] == 'up' or direction[0] == 'down':
-                        thrust = dist[0] * (1 if direction[0] == 'up' else -1)
+                        thrust = dist[0] * (0.8 if direction[0] == 'up' else -0.8)
                     else:
-                        yaw = dist[0] * (1 if direction[0] == 'cw' else -1)
+                        yaw = dist[0] * (0.8 if direction[0] == 'cw' else -0.8)
                 if dist[1] > 0:
                     ## Right/left
                     ## Turn joystick angle into Cartesian angle
@@ -349,13 +367,11 @@ class TelloController():
                     ##      |       to _____|_____(0)
                     ## _____|______               (360)
                     angle_r = -angle[1] + 2 * np.pi + np.pi / 2.0 if -angle[1] + np.pi / 2.0 < 2 * np.pi else -angle[1] + np.pi / 2.0
-                    roll = dist[1] * np.cos(angle_r)
-                    pitch = dist[1] * np.sin(angle_r)
+                    roll = dist[1] * np.cos(angle_r) * 0.8
+                    pitch = dist[1] * np.sin(angle_r) * 0.8
                 self.tello.rc(roll, pitch, thrust, yaw)
                 if not self._in_manual:
                     self._in_manual = True
-                if self._controller_active:
-                    self._controller_active = False
                 if self._manual_timer is not None:
                     self._manual_timer.cancel()
                 self._manual_timer = threading.Timer(0.07, self.__quit_manual)
@@ -368,10 +384,11 @@ class TelloController():
     def __reset_controller_update_flag(self):
         self._controller_ready = True
         ## also update vicon fps
-        self.vicon_freq.set(self.fps_count * 1 / 0.2)
+        self.vicon_freq.set(self.fps_count * 1 / self._controller_reset_interval)
         self.fps_count = 0
 
     def __quit_manual(self):
+        self.tello.rc(0, 0, 0, 0)
         self._in_manual = False
         self._oc_manual_command_count_lock.acquire()
         for k in self._oc_manual_command_count.keys():
@@ -424,6 +441,7 @@ class TelloController():
                                     'UpDir': self.camParams.get_up_vec().tolist()}, \
                         }
             self.command_transport.send(json.dumps(camPosDict))
+            self.vicon_forward.send(json.dumps(camPosDict))
             # signal = self.controller.generate_control_signal(observation)
             ## Only calculate control signal every 300ms
             if self._controller_ready:
@@ -450,28 +468,6 @@ class TelloController():
                             # force task reload
                             self.controller.get_next_subgoal()
 
-                        # self.__get_goal_for_controller()
-                ## Convert mm to cm, as the API uses cm
-                # signal_in_cm = [int(s / 10) for s in signal[:-1]] + [int(signal[-1])]
-
-                #if len(signal_in_cm) == 5:
-                #    ## control signal for line goal
-                #    (pos_speed, x_input, y_input, z_input, yaw_input) = signal_in_cm
-                    #if(self.debug):
-                    #    self.i_pitch.append(yaw_input)
-                    #    self.i_roll.append(y_input)
-                #    if pos_speed != 0:
-                #        self.tello.go(x_input, y_input, z_input, pos_speed)
-                #else:
-                #    (arc_speed, x1, y1, z1, x2, y2, z2, yaw_input) = signal_in_cm
-                #    if arc_speed != 0:
-                #        self.tello.curve(x1, y1, z1, x2, y2, z2, arc_speed)
-
-                #if yaw_input > 0:
-                #    self.tello.rotate_cw(yaw_input)
-                #elif yaw_input < 0:
-                #    self.tello.rotate_ccw(-yaw_input)
-                    
         elif name == self.humanName:
             '''
             Update human position through WebSocket
@@ -491,7 +487,7 @@ class TelloController():
                 print("taking off!")
                 self.tello.takeoff()
                 time.sleep(8)
-                self.tello.move_up(0.2)
+                self.tello.move_up(0.3)
                 ##self.tello.go(-15, -15, 0, 20)
 
             print("Preparing to open Vicon connection")
@@ -514,7 +510,7 @@ class TelloController():
             #                 on_move=None,
             #                 on_click=self.mouse_clicked,
             #                 on_scroll=None)
-            self._keyboard_list.start()
+            #self._keyboard_list.start()
             # self.mouse_listener.start()
             # target_position = [0, -2000, 1000, 0.0, 1.0, 0.0]
             # self.controller.set_target(target_position, time.time())

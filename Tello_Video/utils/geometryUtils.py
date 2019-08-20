@@ -69,11 +69,16 @@ def line_seg_intersect_circle(c, r, p1, p2):
 
 class CameraParameters():
     def __init__(self):
+        # 960 / 768 = 1.25
+        # self._intMatFpv = np.array([[885.5839394885504 / 1.25, 0.0, 488.2530454326725 / 1.25], \
+         #                    [0.0, 883.6668510262632 / 1.25, 362.2197785226864 / 1.25], \
+          #                   [0.0, 0.0, 1.0]])
         self._intMatFpv = np.array([[885.5839394885504, 0.0, 488.2530454326725], \
                             [0.0, 883.6668510262632, 362.2197785226864], \
                             [0.0, 0.0, 1.0]])
-        self._intMatTop = np.array([[788.9962872461164 / 4, 0.0, 627.0971100621931 / 4 ], \
-                                    [0.0, 790.378055853906 / 4, 345.54398722442954 / 4], \
+        # 1280 / 512 = 2.5
+        self._intMatTop = np.array([[788.9962872461164 / 2.5, 0.0, 627.0971100621931 / 2.5 ], \
+                                    [0.0, 790.378055853906 / 2.5, 345.54398722442954 / 2.5], \
                                     [0.0, 0.0, 1.0]])
         ## This is someting 3 * 4 and constant
         #self._extMatTopR = np.array([[0, 1, 0], \
@@ -103,7 +108,7 @@ class CameraParameters():
 
         self._fFpv = (self._intMatFpv[0, 0] + self._intMatFpv[1, 1]) / 2
         self._fTop = (self._intMatTop[0, 0] + self._intMatTop[1, 1]) / 2
-        self._fpvRes = (960, 720)
+        self._fpvRes = (768.0, 576.0)
         self._fov = 57 / 180.0 * np.pi
 
     '''

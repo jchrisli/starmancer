@@ -288,7 +288,7 @@ class ActionPlanner():
         for wp in waypoints:
             wp_dir = orbit_center - wp
             r = np.linalg.norm(wp_dir)
-            t = math.sqrt(2) * r / self._VEL_OC
+            t = math.sqrt(2) * r / (self._VEL_OC * 1.5)
             wp_dir = wp_dir / r
             wp_goal = self.__generate_along_line_subgoal(wp, wp_dir, t, 'continue')
             sub.append((wp_goal, lambda: True))

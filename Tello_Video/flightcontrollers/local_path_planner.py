@@ -18,7 +18,8 @@ class LocalPathPlanner(object):
         self._voi_manager = voi_manager
 
     def __intersect_2d_voi(self, pos, target):
-        vois = self._voi_manager.get2dvois()
+        #vois = self._voi_manager.get2dvois()
+        vois = self._voi_manager.get2d_bounding_boxex()
         for voi in vois:
             voir = voi[2]
             #dist = point_to_line_dist(pos, target, voi[:2])
@@ -52,9 +53,9 @@ class LocalPathPlanner(object):
             heading = rot_m.dot(np.reshape(boundary, (2, 1))).flatten()
             # Project the pid x-y velocity to heading
             # proj_vel = raw_vel[:2].dot(heading) * heading
-            #xy_vel_mag = (1 - dist / self._active_radius) * 0.6 
+            xy_vel_mag = (1 - dist / self._active_radius) * 0.8 
             #xy_vel_mag = min(xy_vel_mag, 0.6)
-            xy_vel_mag = 0.5
+            #xy_vel_mag = 0.5
             proj_vel = (xy_vel_mag / np.linalg.norm(heading)) * heading
             print('Raw velocity %s altered velocity %s' % (str(proj_vel), str(raw_vel[:2])))
             return np.append(proj_vel, raw_vel[2:])
