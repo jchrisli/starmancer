@@ -455,7 +455,7 @@ class TelloController():
                     if not self.debugUI:
                         if control_ret == 1:
                             # Took too long, mission aborted
-                            print('Timeout or cancelled. Mission aborted.')
+                            #print('Timeout or cancelled. Mission aborted.')
                             self.tello.rc(0, 0, 0, 0)
                             # self.tello.land()
                         else:

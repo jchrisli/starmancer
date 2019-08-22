@@ -29,7 +29,7 @@ class VelocityFlightControllerCon(object):
         self._target_timeout_behavior = ''
         # self._target_ind = 0
 
-        self._close_enough_xyz = 0.10 * 1000 
+        self._close_enough_xyz = 0.05 * 1000 
         self._close_enough_yaw = 0.10
         # local drone params
         self._local_heading = np.array([0, 1, 0])
@@ -130,7 +130,7 @@ class VelocityFlightControllerCon(object):
             # if the controller is in the stationary state
             retval = 1
         if self._target_pose.close_enough(curr_pose, self._close_enough_xyz, self._close_enough_yaw):
-            print('Close enough to the target.')
+            # print('Close enough to the target.')
             # retval = 1
             self.__get_subgoal(self._goals_ind + 1)
         elif now > self._target_time + self._stabilize_time:

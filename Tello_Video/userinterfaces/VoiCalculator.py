@@ -223,38 +223,87 @@ class VoiCalulator():
         scale = 1.0
         return (r * scale, h / 2 * scale) 
 
+    def _get_cylinder_3d_aabb(self, center, r, h):
+        voffset = h
+        top_corner_1 = center + np.array([0, r, voffset])
+        top_corner_2 = center + np.array([r, 0, voffset])
+        top_corner_3 = center + np.array([0, -r, voffset])
+        top_corner_4 = center + np.array([-r, 0, voffset])
+        
+        bottom_corner_1 = center + np.array([0, r, -voffset])
+        bottom_corner_2 = center + np.array([r, 0, -voffset])
+        bottom_corner_3 = center + np.array([0, -r, -voffset])
+        bottom_corner_4 = center + np.array([-r, 0, -voffset])
+
+        return np.vstack((top_corner_1, top_corner_2, top_corner_3, top_corner_4,\
+            bottom_corner_1, bottom_corner_2, bottom_corner_3, bottom_corner_4))
+
+    def _get_2d_aabb(self, corners, P):
+        corners_proj = P.dot(np.vstack((corners.T, np.ones((1, corners.shape[0])))))
+        s = corners_proj.shape
+        last_row_m = np.tile(corners_proj[-1,:], (s[0], 1))
+        normalized = np.divide(corners_proj, last_row_m)
+        xy_max = np.amax(normalized[:2,:], axis = 1)
+        xy_min = np.amin(normalized[:2,:], axis = 1)
+        # Return (left, right, top, bottom)
+        return {'left': xy_min[0], 'right': xy_max[0], 'top': xy_min[1], 'bottom': xy_max[1]}
+        
+    def _get_coord_in_roi(self, p, roi):
+        return ((p[0, 0] - roi['left']) / (roi['right'] - roi['left']), (p[1, 0] - roi['top']) / (roi['bottom'] - roi['top']))
+        
+    def _p_from_roi_coord(self, roi, roi_coord):
+        roi_w = roi['right'] - roi['left']
+        roi_h = roi['bottom'] - roi['top']
+        return np.array([roi['left'] + roi_coord[0] * roi_w, roi['top'] + roi_coord[1] * roi_h, 1]).reshape(3, 1)
+
     '''
         Return a volume of interest
-        return (np.array(3): center_x, center_y, center_z, number: radius)
     '''
     def get_voi(self):
         matFpv = self._camParams.get_mat_fpv()
         intMatFpv = self._camParams.get_int_mat_fpv()
         extMatFpv = self._camParams.get_ext_mat_fpv()
+        matTop = self._matTop
         # intMatTop = self._camParams.get_int_mat_top()
         ## First get the two rays extending from the camera to the center of the rois
         (rayFpvOrigin, rayFpvDir) = self._get_roi_ray(self._roiFpv, matFpv)
-        (rayTopOrigin, rayTopDir) = self._get_roi_ray(self._roiTop, self._matTop)
+        (rayTopOrigin, rayTopDir) = self._get_roi_ray(self._roiTop, matTop)
 
         (voiCenter, alongFpvRay, alongTopRay, dist) = self._fuzzy_intersection(rayFpvOrigin, rayFpvDir, rayTopOrigin, rayTopDir)
-        ## TODO: if the dist is too large, do not return voi
         ## r_fpv is the height
-        '''
-        if self._roiFpv['type'] == 'dot':
-            r_fpv = self._DEFAULT_HALF_HEIGHT
-        else:
-            r_fpv = self._fpv_roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
-        if self._roiTop['type'] == 'dot':
-            r_top = self._DEFAULT_RADIUS
-        else:
-            r_top = self._typed_roi_to_3d(self._roiTop, alongTopRay, intMatTop)
-        '''
-        (r_top, r_fpv) = self._fpv_roi_to_3d(self._roiFpv, voiCenter, alongFpvRay, intMatFpv, extMatFpv)
+        # (r_top, r_fpv) = self._fpv_roi_to_3d(self._roiFpv, voiCenter, alongFpvRay, intMatFpv, extMatFpv)
 
+        ## calculate the voi parameters again based on the first result
+        # first reproject the obtained voi center back to the top view
+        first_center = np.vstack((voiCenter.reshape(3, 1), np.array([[1]])))
+        # print('Voi center is at %s' % str(voiCenter))
+
+        (first_r_top, first_r_fpv) = self._fpv_roi_to_3d(self._roiFpv, voiCenter, alongFpvRay, intMatFpv, extMatFpv)
+        # print('Voi radius is %s half height is %s' % (second_r_top, second_r_fpv))
+        reprojected_center_top = matTop.dot(first_center)
+        reprojected_center_top = reprojected_center_top / reprojected_center_top[2, 0]
+
+        ## Adjust the center position in the top cam view based on where the projection of the 
+        ## center lies in the axis-aligned bounding box for the first result
+        # Get the aabb of the cylinder from the first result
+        bb_cornders = self._get_cylinder_3d_aabb(voiCenter, first_r_top, first_r_fpv)
+        print('The 3d bounding box is %s' % str(bb_cornders))
+        # Get the 2d projection of the bb cornders
+        bb2d = self._get_2d_aabb(bb_cornders, matTop)
+        print('The 2d bounding box is %s' % str(bb2d))
+        # Get where the center projection lies in the 2d aabb
+        roi_coord = self._get_coord_in_roi(reprojected_center_top, bb2d)
+        print('roi coord is %s %s' % roi_coord)
+        adj_top_center = self._p_from_roi_coord(self._roiTop, roi_coord)
+        adj_top_ray_o, adj_top_ray_d = self._get_pixel_ray(adj_top_center, self._matTop)
+        (second_center, second_along_fpv, second_along_top, second_dist) = self._fuzzy_intersection(rayFpvOrigin, rayFpvDir, adj_top_ray_o, adj_top_ray_d)
+
+        (second_r_top, second_r_fpv) = self._fpv_roi_to_3d(self._roiFpv, second_center, second_along_fpv, intMatFpv, extMatFpv)
         # r_fpv = self._roi_to_3d(self._roiFpv, alongFpvRay, intMatFpv)
         #print('r1: {0}, r2: {1}'.format(r1, r2))
         # voiRadius = max(r1, r2) / 2
-        return (voiCenter, r_top, r_fpv)
+        #return (voiCenter, r_top, r_fpv)
+        return (second_center, second_r_top, second_r_fpv)
         #return (voiCenter, voiRadius, rayFpvOrigin, rayFpvDir, rayTopOrigin, rayTopDir)
 
 def draw_sphere(cx, cy, cz, r, ax):
