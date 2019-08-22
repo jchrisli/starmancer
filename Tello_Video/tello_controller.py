@@ -155,6 +155,7 @@ class TelloController():
         }
         self._oc_manual_command_threshold = 3
         self._oc_manual_command_count_lock = threading.Lock()
+        self._pure_manual_last_command = 0
 
         #self._esc_pressed = 0
         #self._keyboard_list = keyboard.Listener(on_press=self.key_pressed)
@@ -314,7 +315,9 @@ class TelloController():
                         self.tello.rc(0, 0, 0.2, 0)
                     #elif direction == 'down' and focusVoi['position3d'][2] - np.array(self.state[:3])[2] < focusVoi['sizehh']:
                     elif direction == 'down':
-                        self.tello.rc(0, 0, -0.2, 0)
+                        # Going do is particularly slow
+                        self.tello.rc(0, 0, -0.3, 0)
+                        #print('Sending minus')
                     elif direction == 'left':
                         self.tello.rc(-0.2, 0, 0, 0)
                     elif direction == 'right':
@@ -354,7 +357,11 @@ class TelloController():
                 direction = data['Direction'] 
                 angle = data['Angle']
                 dist = data['Distance']
-                roll = pitch = yaw =  thrust = 0
+                roll = pitch = yaw = thrust = 0
+                #now = time.time()
+                #if self._pure_manual_last_command != 0:
+                #    print('Interval is %s' % str(now - self._pure_manual_last_command))
+                #self._pure_manual_last_command = now
                 if dist[0] > 0:
                     if direction[0] == 'up' or direction[0] == 'down':
                         thrust = dist[0] * (0.8 if direction[0] == 'up' else -0.8)
@@ -370,6 +377,7 @@ class TelloController():
                     roll = dist[1] * np.cos(angle_r) * 0.8
                     pitch = dist[1] * np.sin(angle_r) * 0.8
                 self.tello.rc(roll, pitch, thrust, yaw)
+                print('Sending pure manual command %s %s %s %s' % (roll, pitch, thrust, yaw))
                 if not self._in_manual:
                     self._in_manual = True
                 if self._manual_timer is not None:
@@ -389,6 +397,7 @@ class TelloController():
 
     def __quit_manual(self):
         self.tello.rc(0, 0, 0, 0)
+        # print('Quit manual')
         self._in_manual = False
         self._oc_manual_command_count_lock.acquire()
         for k in self._oc_manual_command_count.keys():

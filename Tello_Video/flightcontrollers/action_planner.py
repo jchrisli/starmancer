@@ -288,7 +288,7 @@ class ActionPlanner():
         for wp in waypoints:
             wp_dir = orbit_center - wp
             r = np.linalg.norm(wp_dir)
-            t = math.sqrt(2) * r / (self._VEL_OC * 1.5)
+            t = math.sqrt(2) * r / self._VEL
             wp_dir = wp_dir / r
             wp_goal = self.__generate_along_line_subgoal(wp, wp_dir, t, 'continue')
             sub.append((wp_goal, lambda: True))
@@ -305,13 +305,15 @@ class ActionPlanner():
         horizontal_dir = horizontal / np.linalg.norm(horizontal)
         horizontal_dist = np.linalg.norm(horizontal)
         if io == 'i':
-            minimum_view_dist = max(voi['view_dist'] / 1.5, voi['size3d'] + 200)
+            # minimum_view_dist = voi['size3d']
             # print('horizontal dist, view dist, size3d: %s %s %s' % (horizontal_dist, voi['view_dist'], voi['size3d']))
-            if horizontal_dist > minimum_view_dist:
-                zoomin_pos = voi['position3d'] -  minimum_view_dist * horizontal_dir
-                t = (horizontal_dist - minimum_view_dist) / self._VEL_OC
-                zoomin_target = self.__generate_along_line_subgoal(zoomin_pos, horizontal_dir, t)
-                sub.append((zoomin_target, lambda: True))
+            # if horizontal_dist > minimum_view_dist:
+            # zoomin_pos = voi['position3d'] -  minimum_view_dist * horizontal_dir
+            # t = (horizontal_dist - minimum_view_dist) / self._VEL_OC
+            t = horizontal_dist / self._VEL_OC
+            zoomin_pos = voi['position3d']
+            zoomin_target = self.__generate_along_line_subgoal(zoomin_pos, horizontal_dir, t)
+            sub.append((zoomin_target, lambda: True))
         elif io == 'o':
             maximum_view_dist = 2 * voi['view_dist']
             if maximum_view_dist > horizontal_dist:

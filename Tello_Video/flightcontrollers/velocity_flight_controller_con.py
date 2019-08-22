@@ -161,7 +161,7 @@ class VelocityFlightControllerCon(object):
 
             motion_signal = np.array([ubar_x, ubar_y, ubar_z])
             ## Do not use local path planning for now
-            #motion_signal = self._local_planner.alter_velocity(self._last_odom_pose.to_np_array(), interim_target.to_np_array(), motion_signal.flatten())
+            motion_signal = self._local_planner.alter_velocity(self._last_odom_pose.to_np_array(), interim_target.to_np_array(), motion_signal.flatten())
             motion_signal = np.reshape(motion_signal, (3, 1))
             # Rotate x, y velocity back to the drone's frame
             #signal_trans = inv(R.dot(self._align_mat))
