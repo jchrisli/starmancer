@@ -153,7 +153,7 @@ class TelloController():
             'cw': 0, \
             'ccw': 0 \
         }
-        self._oc_manual_command_threshold = 3
+        self._oc_manual_command_threshold = 2
         self._oc_manual_command_count_lock = threading.Lock()
         self._pure_manual_last_command = 0
 
@@ -315,7 +315,7 @@ class TelloController():
                         self.tello.rc(0, 0, 0.2, 0)
                     #elif direction == 'down' and focusVoi['position3d'][2] - np.array(self.state[:3])[2] < focusVoi['sizehh']:
                     elif direction == 'down':
-                        # Going do is particularly slow
+                        # Going down is particularly slow
                         self.tello.rc(0, 0, -0.3, 0)
                         #print('Sending minus')
                     elif direction == 'left':
@@ -324,7 +324,7 @@ class TelloController():
                         self.tello.rc(0.2, 0, 0, 0)
                     if self._manual_timer is not None:
                         self._manual_timer.cancel()
-                    self._manual_timer = threading.Timer(0.25, self.__quit_manual)
+                    self._manual_timer = threading.Timer(0.07, self.__quit_manual)
                     self._manual_timer.start()
                 else:
                     self._oc_manual_command_count[direction] += 1
@@ -377,7 +377,7 @@ class TelloController():
                     roll = dist[1] * np.cos(angle_r) * 0.8
                     pitch = dist[1] * np.sin(angle_r) * 0.8
                 self.tello.rc(roll, pitch, thrust, yaw)
-                print('Sending pure manual command %s %s %s %s' % (roll, pitch, thrust, yaw))
+                # print('Sending pure manual command %s %s %s %s' % (roll, pitch, thrust, yaw))
                 if not self._in_manual:
                     self._in_manual = True
                 if self._manual_timer is not None:

@@ -26,7 +26,7 @@ class ActionPlanner():
         self._SAFE_Z = 1800
         self._CAMERA_AXIS_TILT = 12 / 180.0 * math.pi
 
-        self._VEL = 300
+        self._VEL = 400
         self._VEL_OC = 200
 
         self._voi_manager = voim
@@ -210,40 +210,28 @@ class ActionPlanner():
             end_target = voi_pos + view_dist * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
         else:
             lookatpoint = np.array(lookatpoint)
-            end_target = lookatpoint + (view_dist - voi_radius) * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
+            # end_target = lookatpoint + (view_dist - voi_radius) * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
+            dist_to_voi = view_dist * math.cos(self._CAMERA_AXIS_TILT) - voi_radius
+            # end_target = lookatpoint + dist_to_voi * (-vdir) + np.array([0, 0, dist_to_voi * math.tan(self._CAMERA_AXIS_TILT)])
+            end_target = lookatpoint + dist_to_voi * (-vdir)
         # prev_position = init_position
         ## Instead of turning to the target voi, turn to the average of begin and end look direction
         # look_dir = voi_pos - init_position
-        will_intersect = self._voi_manager.test_path_against_all_voi(init_position, end_target)
-        if will_intersect:
-            look_dir = voi_pos - init_position
-        else:
-            look_dir = (vdir + curdir) / 2
-            look_dir = end_target - init_position
-        ## Set z to zero
-        look_dir[2] = 0
-        look_dir = look_dir / np.linalg.norm(look_dir)
+        #will_intersect = self._voi_manager.test_path_against_all_voi(init_position, end_target)
+        #if will_intersect:
+            #look_dir = voi_pos - init_position
+        #else:
+            #look_dir = (vdir + curdir) / 2
+            #look_dir = end_target - init_position
+        ### Set z to zero
+        #look_dir[2] = 0
+        #look_dir = look_dir / np.linalg.norm(look_dir)
         #g_turn = self.__generate_along_line_subgoal(init_position, look_dir)
         #sub.append((g_turn, lambda : True))
         # Set the starting point to be the first subgoal, mark it with a negative time
         first = self.__generate_along_line_subgoal(init_position, curdir, -1)
         sub.append((first, lambda: True))
-        # Get a straight path, and check if it intersect with any of the vois
-        #if will_intersect:
-        #    ## so the path intersect with at least one of the vois, raise the camera to the safe height
-        #    up_target = init_position + np.array([0, 0, self._SAFE_Z - init_position[2]])
-        #    ng_time += (self._SAFE_Z - init_position[2]) / self._VEL
-        #    g_up = self.__generate_along_line_subgoal(up_target, look_dir, ng_time)
-        #    # prev_position = up_target
-        #    sub.append((g_up, lambda : True))
-        #    go_target = np.array([0, 0, self._SAFE_Z - end_target[2]]) + end_target
-        #    ng_time +=  np.linalg.norm(go_target - up_target) / self._VEL
-        #    g_go = self.__generate_along_line_subgoal(go_target, look_dir, ng_time)
-        #    sub.append((g_go, lambda : True))
-        #    ng_time += np.linalg.norm(end_target - go_target) / self._VEL
-        #    go_down = self.__generate_along_line_subgoal(end_target, vdir, ng_time) #    sub.append((go_down, lambda : True))
-        #else:
-        ## Since the path does not intersect with any of the vois, go ahead
+        
         ng_time = np.linalg.norm(end_target - init_position) / self._VEL
         go_straight = self.__generate_along_line_subgoal(end_target, vdir, ng_time)
         sub.append((go_straight, lambda : True))
@@ -262,7 +250,7 @@ class ActionPlanner():
         sub.append((first, lambda: True))
         look_dir[2] = 0
         look_dir = look_dir / np.linalg.norm(look_dir)
-        g_look = self.__generate_along_line_subgoal(position, look_dir, 2.0) # ideally we should calculate this, but use 0.5 for now
+        g_look = self.__generate_along_line_subgoal(position, look_dir, 1.0) # ideally we should calculate this, but use 0.5 for now
         # with self._goal_lock:
         sub.append((g_look, lambda : True))
         self.__set_subgoals(sub)
@@ -282,7 +270,7 @@ class ActionPlanner():
             d = -1
         else:
             d = 1
-        rqs = [Quaternion(axis = [0, 0, 1], angle = d * i * math.pi / 4) for i in range(1, 5)]
+        rqs = [Quaternion(axis = [0, 0, 1], angle = d * i * math.pi / 4) for i in range(1, 9)]
         waypoints_offsets = map(lambda rq: rq.rotate(offset), rqs)
         waypoints = map(lambda offset: offset + voi_center, waypoints_offsets)
         for wp in waypoints:

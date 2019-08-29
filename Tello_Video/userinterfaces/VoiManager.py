@@ -44,8 +44,8 @@ class VoiManager():
         posInTopdown = (posInTopdown / posInTopdown[2, 0]).flatten()
         #print('2D coords {0}'.format(str(posInTopdown)))
         ## Put the object in the center of the frame
-        #defaultViewDist = max(550.0, self._fFpv * sizeHalfHeight / (self._fpvRes[1] / 3))
-        defaultViewDist = self._fFpv * max(size3d, sizeHalfHeight) / (self._fpvRes[1] / 3.333)
+        # defaultViewDist = self._fFpv * max(size3d, sizeHalfHeight) / (self._fpvRes[1] / 3.333)
+        defaultViewDist = self._fFpv * max(size3d, sizeHalfHeight) / (self._fpvRes[1] / 3.0)
         voiEntry = {"id": voiId, "position3d": pos3d, "size3d": size3d, "sizehh": sizeHalfHeight, "position_topdown": posInTopdown, "size_topdown": sizeTopdown, "view_dist": defaultViewDist}
         self.vois.append(voiEntry)
         return voiEntry
@@ -132,8 +132,8 @@ class VoiManager():
         return vois2d
 
     def get2d_bounding_boxex(self):
-        bb = [(42.73686555, 715.24277647, 150 + self._CAM_DIAG / 2.0),\
-            (-1647.58799028, 1052.11543762, 150 + self._CAM_DIAG / 2.0),\
-            (-62.80333094, -1281.93800245, 150 + self._CAM_DIAG / 2.0)]
+        bb = [(42.73686555, 715.24277647, 150 + self._CAM_DIAG / 2.0, 1042.1084, 326.8656),\
+            (-1356.42357852, 886.8401127, 150 + self._CAM_DIAG / 2.0, 1280.83605, 231.01754999999991),\
+            (-62.80333094, -1281.93800245, 150 + self._CAM_DIAG / 2.0,  1214.2033000000001, 166.32910000000004)]
         return bb
 

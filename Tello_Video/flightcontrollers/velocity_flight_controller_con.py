@@ -29,7 +29,7 @@ class VelocityFlightControllerCon(object):
         self._target_timeout_behavior = ''
         # self._target_ind = 0
 
-        self._close_enough_xyz = 0.05 * 1000 
+        self._close_enough_xyz = 0.10 * 1000 
         self._close_enough_yaw = 0.10
         # local drone params
         self._local_heading = np.array([0, 1, 0])
