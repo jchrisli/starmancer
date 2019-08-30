@@ -28,6 +28,7 @@ import copy
 from utils.geometryUtils import CameraParameters
 from flightcontrollers.action_planner import ActionPlanner
 from flightcontrollers.local_path_planner import LocalPathPlanner
+from flightcontrollers.manual_guard import ManualGuard
 import numpy as np
 # from pyquaternion import Quaternion
 from utils.geometryUtils import vec_to_mat
@@ -156,6 +157,11 @@ class TelloController():
         self._oc_manual_command_threshold = 2
         self._oc_manual_command_count_lock = threading.Lock()
         self._pure_manual_last_command = 0
+
+        ## Manual control guard
+        self._field_boundary = (-50 * 10 * 5, 50 * 10 * 3, -50 * 10 * 4.5, 50 * 10 * 3.5)
+        self._field_obstacles = self.voiMng.get_manual_collision_volume()
+        self._manual_guard = ManualGuard(self._field_obstacles, self._field_boundary, 0.0)
 
         #self._esc_pressed = 0
         #self._keyboard_list = keyboard.Listener(on_press=self.key_pressed)
@@ -376,7 +382,13 @@ class TelloController():
                     angle_r = -angle[1] + 2 * np.pi + np.pi / 2.0 if -angle[1] + np.pi / 2.0 < 2 * np.pi else -angle[1] + np.pi / 2.0
                     roll = dist[1] * np.cos(angle_r) * 0.8
                     pitch = dist[1] * np.sin(angle_r) * 0.8
-                self.tello.rc(roll, pitch, thrust, yaw)
+                if self._manual_guard.check_safety(self.state[:3], self.state[3:], roll, pitch, thrust):
+                    self.tello.rc(roll, pitch, thrust, yaw)
+                else:
+                    print('Not safe!')
+                    # self.tello.rc(0, 0, 0, 0)
+                    self.tello.rc(-roll, -pitch, -thrust, yaw)
+
                 # print('Sending pure manual command %s %s %s %s' % (roll, pitch, thrust, yaw))
                 if not self._in_manual:
                     self._in_manual = True

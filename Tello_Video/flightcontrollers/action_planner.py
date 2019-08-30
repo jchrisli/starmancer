@@ -26,7 +26,7 @@ class ActionPlanner():
         self._SAFE_Z = 1800
         self._CAMERA_AXIS_TILT = 12 / 180.0 * math.pi
 
-        self._VEL = 400
+        self._VEL = 500
         self._VEL_OC = 200
 
         self._voi_manager = voim
