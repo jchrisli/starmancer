@@ -252,6 +252,9 @@ class TelloController():
             entryCopy["position_topdown"] = entry["position_topdown"].tolist()
             addRoiCommand = {'type': 'roi3d', 'payload': entryCopy}
             self.command_transport.send(json.dumps(addRoiCommand))
+            ## Start approaching the defined VOI
+            vdir = entry['position3d'] - np.array(self.state[0:3])
+            self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], entry, vdir, vel = 300)
 
         elif data['Type'] == 'roitopdown':
             topRoi = data['TopdownRoi']
@@ -292,7 +295,7 @@ class TelloController():
             print('Get focus 3d command for %d %s %s' % (focusId, str(vdir), str(vpoint)))
             if focusVoi is not None:
                 self._oc_focus_id = focusId
-                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir, vpoint)
+                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir, lookatpoint = vpoint)
                 # self.__get_goal_for_controller()
 
         elif data['Type'] == 'approach':
@@ -352,6 +355,7 @@ class TelloController():
                                     #self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'left' else 'r') 
                                     self.actionPlan.generate_subgoals_manual_orbit(self.state[0:3], self.state[3:], focusVoi, 'l' if direction == 'ccw' else 'r') 
                                 else:
+                                    print('Generate zoom goals')
                                     self.actionPlan.generate_subgoals_manual_zoom(self.state[0:3], self.state[3:], focusVoi, 'i' if direction == 'forward' else 'o')
                             if direction == 'up' or direction == 'down' and direction == 'left' or direction == 'right':
                                 # self.actionPlan.abort_subgoals()

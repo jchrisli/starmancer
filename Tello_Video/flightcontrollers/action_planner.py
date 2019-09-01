@@ -194,20 +194,23 @@ class ActionPlanner():
         If there is any potential of contact just raise the camera up and come down, thus 'on stilts'
         Otherwise go straight
     """
-    def generate_subgoals_voi_onstilts(self, position, curdir, voi, vdir, lookatpoint = None):
+    def generate_subgoals_voi_onstilts(self, position, curdir, voi, vdir, lookatpoint = None, vel = None):
+        # velo = self._VEL if vel is None else vel
         sub = []
         # now = time.time()
         # post_sub = []
         init_position = np.array(position)
         view_dist = voi['view_dist']
         voi_pos = voi['position3d']
-        vdir = np.array(vdir)
+        if not isinstance(vdir, np.ndarray): 
+            vdir = np.array(vdir)
         vdir = vdir / np.linalg.norm(vdir)
         voi_radius = voi['size3d']
         curdir = np.array(curdir)
         # end_target = voi_pos + view_dist * (-vdir)
         if lookatpoint is None:
-            end_target = voi_pos + view_dist * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
+            # end_target = voi_pos + view_dist * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
+            end_target = voi_pos + view_dist * math.cos(self._CAMERA_AXIS_TILT) * (-vdir) + np.array([0, 0, view_dist * math.sin(self._CAMERA_AXIS_TILT)])
         else:
             lookatpoint = np.array(lookatpoint)
             # end_target = lookatpoint + (view_dist - voi_radius) * (-vdir) + np.array([0, 0, (view_dist - voi_radius) * math.tan(self._CAMERA_AXIS_TILT)])
@@ -231,8 +234,14 @@ class ActionPlanner():
         # Set the starting point to be the first subgoal, mark it with a negative time
         first = self.__generate_along_line_subgoal(init_position, curdir, -1)
         sub.append((first, lambda: True))
-        
-        ng_time = np.linalg.norm(end_target - init_position) / self._VEL
+        dist = np.linalg.norm(end_target - init_position)
+        if vel is not None:        
+            ng_time = dist / vel
+        else:
+            exp_time = math.log(0.09234 * (dist + 1))
+            exp_speed = dist / exp_time
+            print("Expected time %s expected speed %s" % (exp_time, exp_speed))
+            ng_time = exp_time if exp_speed < self._VEL * 1.1 else dist / self._VEL
         go_straight = self.__generate_along_line_subgoal(end_target, vdir, ng_time)
         sub.append((go_straight, lambda : True))
         self.__set_subgoals(sub)

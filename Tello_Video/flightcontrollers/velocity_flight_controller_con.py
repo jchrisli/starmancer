@@ -35,7 +35,7 @@ class VelocityFlightControllerCon(object):
         self._local_heading = np.array([0, 1, 0])
         ## Note there is no need to align with this drone model, as the x, y, z axes match exactly with roll, pitch, thrust
         #self._align_mat = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
-        self._stabilize_time = 8.0
+        self._stabilize_time = 5.0
 
         self._curr_vel = np.array([0, 0, 0])
         self._last_odom_pose = None
