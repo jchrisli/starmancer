@@ -41,7 +41,8 @@ class ManualGuard(object):
 
     def check_safety(self, position, hdir, roll, pitch, thrust):
         curr_pos_arr = np.array(position, dtype = np.float32)
-        safe_b = self.__check_safety_boundary(position)
+        # safe_b = self.__check_safety_boundary(position)
+        safe_b = True
         not_safe_o = self.__check_safety_obstacles(position)
         if not safe_b or not_safe_o is not None:
             #print('Likely not safe')

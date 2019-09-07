@@ -314,9 +314,10 @@ class VoiCalulator():
         # voiRadius = max(r1, r2) / 2
 
         # Study I 
-        #if voiCenter[0] > 0:
-        #    voiCenter = voiCenter + np.array([-200 if voiCenter[1] < 0 else -100, 0, 0])
-
+        if voiCenter[0] > 0 and voiCenter[1] < 0:
+            voiCenter = voiCenter + np.array([-150, 0, 0])
+            # voiCenter = voiCenter + np.array([-150, 0, 0])
+        first_r_top = min(175.0, first_r_top)
         return (voiCenter, first_r_top, first_r_fpv)
         # return (second_center, second_r_top, second_r_fpv)
         #return (voiCenter, voiRadius, rayFpvOrigin, rayFpvDir, rayTopOrigin, rayTopDir)

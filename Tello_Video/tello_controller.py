@@ -253,8 +253,8 @@ class TelloController():
             addRoiCommand = {'type': 'roi3d', 'payload': entryCopy}
             self.command_transport.send(json.dumps(addRoiCommand))
             ## Start approaching the defined VOI
-            vdir = entry['position3d'] - np.array(self.state[0:3])
-            self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], entry, vdir, vel = 300)
+            #vdir = entry['position3d'] - np.array(self.state[0:3])
+            #self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], entry, vdir, vel = 400)
 
         elif data['Type'] == 'roitopdown':
             topRoi = data['TopdownRoi']
@@ -278,8 +278,9 @@ class TelloController():
             print('Get look command for %s' % lookAtId)
             lookAtVoi = self.voiMng.get_voi(lookAtId)
             if lookAtVoi is not None:
-                lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
-                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], lookAtVoi, lookDir)
+                #lookDir = [data['LookDir'][1], data['LookDir'][0], 0]
+                #self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], lookAtVoi, lookDir)
+                self.actionPlan.generate_subgoals_look(self.state[0:3], self.state[3:], lookAtVoi['position3d'])
                 # self.__get_goal_for_controller()
 
         elif data['Type'] == 'focus':
@@ -293,9 +294,16 @@ class TelloController():
             vdir = data['LookDir']
             vpoint = data['LookPoint']
             print('Get focus 3d command for %d %s %s' % (focusId, str(vdir), str(vpoint)))
+            ## Study I: if the view direction is opposite to the current viewing direction, slow the drone down
+            vdir_vec = np.array(vdir)
+            vdir_vec = vdir_vec / np.linalg.norm(vdir_vec)
+            curr_dir_vec = np.array(self.state[3:])
+            ## velocity = 600 if vdir_vec.dot(curr_dir_vec) < np.cos(np.pi / 4) else 0
+            velocity = None if vdir_vec.dot(curr_dir_vec) < np.cos(np.pi / 4) else 0
+
             if focusVoi is not None:
                 self._oc_focus_id = focusId
-                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir, lookatpoint = vpoint)
+                self.actionPlan.generate_subgoals_voi_onstilts(self.state[0:3], self.state[3:], focusVoi, vdir, lookatpoint = vpoint, vel=velocity)
                 # self.__get_goal_for_controller()
 
         elif data['Type'] == 'approach':
@@ -308,9 +316,16 @@ class TelloController():
 
         elif data['Type'] == 'home':
             self.actionPlan.abort_subgoals()
-            self.voiMng.clear_all_vois()
+            if(data['Clear']):
+                self.voiMng.clear_all_vois()
             ## Remove all existing rois
             self.actionPlan.generate_subgoals_position(self.state[0:3], self.state[3:], self._home_position, self._home_dir)
+
+        elif data['Type'] == 'transform':
+            focusId = data['Id']
+            scale = data['Scale']
+            translate = data['Translate']
+            self.actionPlan.generate_subgoals_view_transform(self.state[:3], self.state[3:], focusId, scale, translate)
             
         elif data['Type'] == 'move':
             if self._oc_focus_id != -1:

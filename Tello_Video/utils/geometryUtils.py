@@ -167,7 +167,6 @@ class CameraParameters():
 
     def get_f_fpv(self):
         return self._fFpv
-
         
     def get_ext_mat_fpv(self):
         return self._extMatFpv

@@ -81,33 +81,32 @@ class VoiManager():
         else:
             return False
 
-    #def get_voi_fpv_projection(self, voi):
-    #    #voi = self.get_voi(voiId)
-            ## project this voi onto the fpv camera view
-    #    em = self._camParams.get_ext_mat_fpv()
-    #    im = self._camParams.get_int_mat_fpv()
-    #    pos3d = voi['position3d']
-    #    #pos3d = np.array([0, 0, 1000])
-    #    size3d = voi['size3d']
-    #    sizehh = voi['sizehh']
-    #    voiId = voi['id']
-    #    pos3dInFpv = em.dot(np.append(pos3d, [1.0]).reshape(4, 1))
-    #    dist2Fpv = pos3dInFpv[2, 0]
-    #    if dist2Fpv <= 0:
-    #        return None
-    #    widthInFpv = 2 * self._fFpv * size3d / dist2Fpv
-    #    heightInFpv = 2 * self._fFpv * sizehh / dist2Fpv
-    #    posInFpv = im.dot(pos3dInFpv)
-    #    posInFpv = (posInFpv / posInFpv[2, 0]).flatten()
-    #    if self.__in_fpv_frame(posInFpv[0], posInFpv[1]):
-    #        return (voiId, posInFpv.tolist(), widthInFpv, heightInFpv)
-    #    else:
-    #        return None
-
     def get_voi(self, id):
         voi = filter(lambda v: v["id"] == id, self.vois)
         if len(voi) > 0:
             return voi[0]
+        else:
+            return None
+
+    def get_offset_for_transform(self, ind, scale, translate):
+        voi = self.get_voi(ind)
+        if voi is not None:
+            ## Calculate current voi position in the camera frame  
+            voi_pos_world = np.array(voi['position3d']).reshape(3, 1)
+            voi_pos_world = np.append(voi_pos_world, np.array([[1]]), axis=0)
+            ext_mat = self._camParams.get_ext_mat_fpv()
+            R_inv = np.linalg.inv(ext_mat[:3,:3])
+            voi_pos_cam_1 = ext_mat.dot(voi_pos_world)
+            z1 = voi_pos_cam_1[2, 0]
+            z2 = max(z1 / scale, voi['size3d'] + 150 + self._CAM_DIAG / 2.0)
+            f = self._camParams.get_f_fpv()
+            translate_arr = np.array(translate).reshape(2,1) + voi_pos_cam_1[:2, :] * f / z1
+            denom = f / z2
+            xy2 = translate_arr / denom
+            xyz2 = np.append(xy2, np.array([[z2]]), axis=0)
+            offset = R_inv.dot(voi_pos_cam_1[:3,:] - xyz2)
+            print('Offset is %s' % offset.flatten())
+            return offset.flatten()
         else:
             return None
 
@@ -133,13 +132,13 @@ class VoiManager():
 
     def get2d_bounding_boxex(self):
         bb = [(42.73686555, 715.24277647, 150 + self._CAM_DIAG / 2.0, 1042.1084, 326.8656),\
-            (-1356.42357852, 886.8401127, 150 + self._CAM_DIAG / 2.0, 1280.83605, 231.01754999999991),\
-            (-62.80333094, -1281.93800245, 150 + self._CAM_DIAG / 2.0,  1214.2033000000001, 166.32910000000004)]
+            (-1390.2046069, 836.44244155, 150 + self._CAM_DIAG / 2.0, 1280.83605, 231.01754999999991),\
+            (-20.01757625, -1500.32728548, 150 + self._CAM_DIAG / 2.0,  1214.2033000000001, 166.32910000000004)]
         return bb
         
     def get_manual_collision_volume(self):
         bb = [(42.73686555, 715.24277647, 250 + self._CAM_DIAG, (326.8656 + 1042.1084) / 2, (326.8656 + 1042.1084) / 2),\
-            (-1356.42357852, 886.8401127, 200 + self._CAM_DIAG, (1280.83605 + 231.01754999999991) / 2, (1280.83605 + 231.01754999999991) / 2),\
-            (-62.80333094, -1281.93800245, 250 + self._CAM_DIAG,  (166.32910000000004 + 1214.2033000000001) / 2, (166.32910000000004 + 1214.2033000000001) / 2)]
+            (-1390.2046069, 836.44244155, 200 + self._CAM_DIAG, 1504.1146 / 2, 1504.1146 / 2),\
+            (-20.01757625, -1500.32728548, 250 + self._CAM_DIAG,  1431.49 / 2, 1431.49 / 2)]
         return bb
 

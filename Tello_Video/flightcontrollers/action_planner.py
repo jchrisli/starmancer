@@ -236,13 +236,18 @@ class ActionPlanner():
         sub.append((first, lambda: True))
         dist = np.linalg.norm(end_target - init_position)
         if vel is not None:        
-            ng_time = dist / vel
+            ng_time = dist / vel if vel != 0 else 0
         else:
-            exp_time = math.log(0.09234 * (dist + 1))
+            # exp_time = math.log(0.09234 * (dist + 1))
+            exp_time = math.log(0.04 * (dist + 1))
             exp_speed = dist / exp_time
             print("Expected time %s expected speed %s" % (exp_time, exp_speed))
             ng_time = exp_time if exp_speed < self._VEL * 1.1 else dist / self._VEL
-        go_straight = self.__generate_along_line_subgoal(end_target, vdir, ng_time)
+        #ng_time = dist / self._VEL
+        if ng_time > 0:
+            go_straight = self.__generate_along_line_subgoal(end_target, vdir, ng_time)
+        else:
+            go_straight = self.__generate_along_line_subgoal(end_target, vdir, ng_time, timeout_behavior="continue")
         sub.append((go_straight, lambda : True))
         self.__set_subgoals(sub)
         print(self._subgoals)
@@ -338,6 +343,14 @@ class ActionPlanner():
 
         self.__set_subgoals(sub)
         print(self._subgoals)
+
+    def generate_subgoals_view_transform(self, pos, cdir, voiind, scale, translate):
+        cpos = np.array(pos)
+        offset = self._voi_manager.get_offset_for_transform(voiind, scale, translate)
+        if offset is not None:
+            fpos = cpos + offset
+            self.generate_subgoals_position(cpos, cdir, fpos, cdir)
+
 
     def generate_subgoals_appraoch(self, cur_position, cur_dir, voi):
         self.generate_subgoals_voi_onstilts(cur_position, cur_dir, voi, cur_dir)

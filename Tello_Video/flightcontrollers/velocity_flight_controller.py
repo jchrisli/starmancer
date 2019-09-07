@@ -53,6 +53,8 @@ class DronePose():
         return np.array([self.x, self.y, self.z, self.yaw])
 
     def move_timed(self, target, total_time, elapsed_time): 
+        if total_time == 0:
+            return target
         diff = self.vec_to(target)
         t = min(elapsed_time / total_time, 1.0)
         to_x = self.x + diff[0] * t
